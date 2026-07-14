@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Service Ticket Reporting Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: uploads
+    description: Data upload operations
+  - name: dashboard
+    description: Dashboard summary data
+  - name: reports
+    description: Report analytics
+  - name: schedules
+    description: Report schedule configuration
+  - name: filters
+    description: Filter options
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +38,1403 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /users/{id}/permissions:
+    patch:
+      operationId: updateUserPermissions
+      tags: [users]
+      summary: Update which dashboard sections a user can access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PermissionsUpdate"
+      responses:
+        "200":
+          description: Permissions updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /uploads:
+    get:
+      operationId: listUploads
+      tags: [uploads]
+      summary: List all data uploads
+      responses:
+        "200":
+          description: List of uploads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Upload"
+    post:
+      operationId: uploadData
+      tags: [uploads]
+      summary: Upload Excel data file (active tickets, closed tickets, or MRF)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadInput"
+      responses:
+        "201":
+          description: Upload processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "400":
+          description: Invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /uploads/{id}:
+    delete:
+      operationId: deleteUpload
+      tags: [uploads]
+      summary: Delete an upload and its associated data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get high-level ticket summary counts and KPIs
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: state
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/active-tickets:
+    get:
+      operationId: getActiveTickets
+      tags: [dashboard]
+      summary: Get active tickets with age, pending counts, and breakdowns
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: state
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: page
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: pageSize
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Active tickets data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveTicketsResult"
+
+  /dashboard/closed-tickets:
+    get:
+      operationId: getClosedTickets
+      tags: [dashboard]
+      summary: Get closed tickets with TAT breakdown by activity stage
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: state
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: page
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: pageSize
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Closed tickets data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClosedTicketsResult"
+
+  /reports/product-failure:
+    get:
+      operationId: getProductFailureReport
+      tags: [reports]
+      summary: Product-wise failure analysis
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Product failure data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductFailureItem"
+
+  /reports/component-failure:
+    get:
+      operationId: getComponentFailureReport
+      tags: [reports]
+      summary: Component-wise failure analysis
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Component failure data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComponentFailureItem"
+
+  /reports/warranty-analysis:
+    get:
+      operationId: getWarrantyAnalysisReport
+      tags: [reports]
+      summary: Warranty-wise ticket analysis (IW, OW, Extended, Jeevanam)
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Warranty analysis data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarrantyAnalysisResult"
+
+  /reports/sales-complaint:
+    get:
+      operationId: getSalesComplaintReport
+      tags: [reports]
+      summary: Sales vs complaint (BD tickets) analysis
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: state
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Sales vs complaint data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesComplaintItem"
+
+  /reports/tat-analysis:
+    get:
+      operationId: getTatAnalysisReport
+      tags: [reports]
+      summary: TAT (turnaround time) analysis per activity stage
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: category
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: product
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: state
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: TAT analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TatAnalysisResult"
+
+  /reports/mrf-analysis:
+    get:
+      operationId: getMrfAnalysisReport
+      tags: [reports]
+      summary: MRF (Material Request Form) analysis and approval tracking
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: dateTo
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: servicePartner
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: ash
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: rsh
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: MRF analysis data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MrfAnalysisResult"
+
+  /schedules:
+    get:
+      operationId: listSchedules
+      tags: [schedules]
+      summary: List all configured report schedules
+      responses:
+        "200":
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Schedule"
+    post:
+      operationId: createSchedule
+      tags: [schedules]
+      summary: Create a new report delivery schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleInput"
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+
+  /schedules/{id}:
+    get:
+      operationId: getSchedule
+      tags: [schedules]
+      summary: Get a schedule by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    patch:
+      operationId: updateSchedule
+      tags: [schedules]
+      summary: Update a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleUpdate"
+      responses:
+        "200":
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    delete:
+      operationId: deleteSchedule
+      tags: [schedules]
+      summary: Delete a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /filters/options:
+    get:
+      operationId: getFilterOptions
+      tags: [filters]
+      summary: Get all distinct filter option values for the current dataset
+      responses:
+        "200":
+          description: Filter options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilterOptions"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, name, email, role, isActive, permissions]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, ash, rsh, service_partner]
+        isActive:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        managerId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, ash, rsh, service_partner]
+        managerId:
+          type: ["integer", "null"]
+        permissions:
+          type: array
+          items:
+            type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, ash, rsh, service_partner]
+        isActive:
+          type: boolean
+        managerId:
+          type: ["integer", "null"]
+        permissions:
+          type: array
+          items:
+            type: string
+
+    PermissionsUpdate:
+      type: object
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          items:
+            type: string
+
+    Upload:
+      type: object
+      required: [id, filename, fileType, recordCount, uploadedAt, status]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        fileType:
+          type: string
+          enum: [active_tickets, closed_tickets, mrf_data]
+        recordCount:
+          type: integer
+        uploadedAt:
+          type: string
+        status:
+          type: string
+          enum: [processing, completed, failed]
+        errorMessage:
+          type: ["string", "null"]
+
+    UploadInput:
+      type: object
+      required: [fileType]
+      properties:
+        fileType:
+          type: string
+          enum: [active_tickets, closed_tickets, mrf_data]
+        file:
+          type: string
+          format: binary
+
+    DashboardSummary:
+      type: object
+      required: [totalActive, totalClosed, totalMrf, avgTatMinutes, pendingByAge, byState, byCategory, recentUploads]
+      properties:
+        totalActive:
+          type: integer
+        totalClosed:
+          type: integer
+        totalMrf:
+          type: integer
+        avgTatMinutes:
+          type: ["number", "null"]
+        pendingByAge:
+          type: object
+          required: [within7Days, within15Days, within30Days, above30Days]
+          properties:
+            within7Days:
+              type: integer
+            within15Days:
+              type: integer
+            within30Days:
+              type: integer
+            above30Days:
+              type: integer
+        byState:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        recentUploads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Upload"
+
+    CountByLabel:
+      type: object
+      required: [label, count]
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+
+    ActiveTicketsResult:
+      type: object
+      required: [tickets, total, byProduct, byServicePartner, byAsh, byRsh, byAgeBucket]
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActiveTicket"
+        total:
+          type: integer
+        byProduct:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byServicePartner:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byAsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byRsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byAgeBucket:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+
+    ActiveTicket:
+      type: object
+      required: [ticketId, createdOn, product, category, servicePartner, ash, rsh, state, status, ageDays, supportType, ticketType]
+      properties:
+        ticketId:
+          type: string
+        createdOn:
+          type: string
+        product:
+          type: string
+        category:
+          type: string
+        servicePartner:
+          type: string
+        ash:
+          type: string
+        rsh:
+          type: string
+        state:
+          type: string
+        status:
+          type: string
+        wipSubStage:
+          type: ["string", "null"]
+        ageDays:
+          type: integer
+        supportType:
+          type: string
+        ticketType:
+          type: string
+        customerName:
+          type: string
+
+    ClosedTicketsResult:
+      type: object
+      required: [tickets, total, avgTat, byServicePartner, byAsh, byRsh, byState, byTicketType]
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClosedTicket"
+        total:
+          type: integer
+        avgTat:
+          type: ["number", "null"]
+        byServicePartner:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byAsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byRsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byState:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byTicketType:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+
+    AvgTatByLabel:
+      type: object
+      required: [label, count, avgTatMinutes]
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+        avgTatMinutes:
+          type: ["number", "null"]
+
+    ClosedTicket:
+      type: object
+      required: [ticketId, createdOn, product, category, servicePartner, ash, rsh, state, closedDate, tatMinutes, supportType, ticketType, closureType]
+      properties:
+        ticketId:
+          type: string
+        createdOn:
+          type: string
+        product:
+          type: string
+        category:
+          type: string
+        servicePartner:
+          type: string
+        ash:
+          type: string
+        rsh:
+          type: string
+        state:
+          type: string
+        closedDate:
+          type: string
+        tatMinutes:
+          type: ["number", "null"]
+        supportType:
+          type: string
+        ticketType:
+          type: string
+        closureType:
+          type: ["string", "null"]
+        customerName:
+          type: string
+
+    ProductFailureItem:
+      type: object
+      required: [product, category, totalTickets, breakdownTickets, pmTickets, warrantyCount, outOfWarrantyCount]
+      properties:
+        product:
+          type: string
+        category:
+          type: string
+        totalTickets:
+          type: integer
+        breakdownTickets:
+          type: integer
+        pmTickets:
+          type: integer
+        warrantyCount:
+          type: integer
+        outOfWarrantyCount:
+          type: integer
+
+    ComponentFailureItem:
+      type: object
+      required: [component, partCode, usageCount, productList]
+      properties:
+        component:
+          type: string
+        partCode:
+          type: string
+        usageCount:
+          type: integer
+        productList:
+          type: array
+          items:
+            type: string
+
+    WarrantyAnalysisResult:
+      type: object
+      required: [summary, byProduct, byServicePartner, byState]
+      properties:
+        summary:
+          type: object
+          required: [inWarranty, outOfWarranty, unverified, extended, jeevanam]
+          properties:
+            inWarranty:
+              type: integer
+            outOfWarranty:
+              type: integer
+            unverified:
+              type: integer
+            extended:
+              type: integer
+            jeevanam:
+              type: integer
+        byProduct:
+          type: array
+          items:
+            $ref: "#/components/schemas/WarrantyByLabel"
+        byServicePartner:
+          type: array
+          items:
+            $ref: "#/components/schemas/WarrantyByLabel"
+        byState:
+          type: array
+          items:
+            $ref: "#/components/schemas/WarrantyByLabel"
+
+    WarrantyByLabel:
+      type: object
+      required: [label, inWarranty, outOfWarranty, unverified]
+      properties:
+        label:
+          type: string
+        inWarranty:
+          type: integer
+        outOfWarranty:
+          type: integer
+        unverified:
+          type: integer
+
+    SalesComplaintItem:
+      type: object
+      required: [product, category, state, bdTickets, totalTickets]
+      properties:
+        product:
+          type: string
+        category:
+          type: string
+        state:
+          type: string
+        bdTickets:
+          type: integer
+        totalTickets:
+          type: integer
+
+    TatAnalysisResult:
+      type: object
+      required: [overall, stages, byServicePartner, byAsh, byRsh, byState]
+      properties:
+        overall:
+          type: object
+          required: [avgTatMinutes, medianTatMinutes, within24h, within48h, within72h, above72h]
+          properties:
+            avgTatMinutes:
+              type: ["number", "null"]
+            medianTatMinutes:
+              type: ["number", "null"]
+            within24h:
+              type: integer
+            within48h:
+              type: integer
+            within72h:
+              type: integer
+            above72h:
+              type: integer
+        stages:
+          type: object
+          required: [wipAvgMinutes, mrfRequestAvgMinutes, mrfApprovedAvgMinutes, dispatchedAvgMinutes]
+          properties:
+            wipAvgMinutes:
+              type: ["number", "null"]
+            mrfRequestAvgMinutes:
+              type: ["number", "null"]
+            mrfApprovedAvgMinutes:
+              type: ["number", "null"]
+            dispatchedAvgMinutes:
+              type: ["number", "null"]
+        byServicePartner:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byAsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byRsh:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+        byState:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvgTatByLabel"
+
+    MrfAnalysisResult:
+      type: object
+      required: [totalMrf, approved, pending, dispatched, byComponent, byServicePartner]
+      properties:
+        totalMrf:
+          type: integer
+        approved:
+          type: integer
+        pending:
+          type: integer
+        dispatched:
+          type: integer
+        byComponent:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentMrfItem"
+        byServicePartner:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+
+    ComponentMrfItem:
+      type: object
+      required: [component, partCode, quantity, mrfCount]
+      properties:
+        component:
+          type: string
+        partCode:
+          type: string
+        quantity:
+          type: integer
+        mrfCount:
+          type: integer
+
+    Schedule:
+      type: object
+      required: [id, name, reportTypes, frequency, audiences, productCategories, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        reportTypes:
+          type: array
+          items:
+            type: string
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly, custom]
+        weekDay:
+          type: ["integer", "null"]
+        monthDay:
+          type: ["integer", "null"]
+        customCron:
+          type: ["string", "null"]
+        audiences:
+          type: array
+          items:
+            type: string
+            enum: [service_partner, ash, rsh, management]
+        productCategories:
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+          properties:
+            dateRangeDays:
+              type: ["integer", "null"]
+            servicePartner:
+              type: ["string", "null"]
+            ash:
+              type: ["string", "null"]
+            rsh:
+              type: ["string", "null"]
+        isActive:
+          type: boolean
+        lastRunAt:
+          type: ["string", "null"]
+        nextRunAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ScheduleInput:
+      type: object
+      required: [name, reportTypes, frequency, audiences, productCategories]
+      properties:
+        name:
+          type: string
+        reportTypes:
+          type: array
+          items:
+            type: string
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly, custom]
+        weekDay:
+          type: ["integer", "null"]
+        monthDay:
+          type: ["integer", "null"]
+        customCron:
+          type: ["string", "null"]
+        audiences:
+          type: array
+          items:
+            type: string
+            enum: [service_partner, ash, rsh, management]
+        productCategories:
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+          properties:
+            dateRangeDays:
+              type: ["integer", "null"]
+            servicePartner:
+              type: ["string", "null"]
+            ash:
+              type: ["string", "null"]
+            rsh:
+              type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    ScheduleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        reportTypes:
+          type: array
+          items:
+            type: string
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly, custom]
+        weekDay:
+          type: ["integer", "null"]
+        monthDay:
+          type: ["integer", "null"]
+        customCron:
+          type: ["string", "null"]
+        audiences:
+          type: array
+          items:
+            type: string
+            enum: [service_partner, ash, rsh, management]
+        productCategories:
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+          properties:
+            dateRangeDays:
+              type: ["integer", "null"]
+            servicePartner:
+              type: ["string", "null"]
+            ash:
+              type: ["string", "null"]
+            rsh:
+              type: ["string", "null"]
+        isActive:
+          type: boolean
+
+    FilterOptions:
+      type: object
+      required: [categories, products, servicePartners, ashList, rshList, states, warrantyTypes, ticketTypes]
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+        products:
+          type: array
+          items:
+            type: string
+        servicePartners:
+          type: array
+          items:
+            type: string
+        ashList:
+          type: array
+          items:
+            type: string
+        rshList:
+          type: array
+          items:
+            type: string
+        states:
+          type: array
+          items:
+            type: string
+        warrantyTypes:
+          type: array
+          items:
+            type: string
+        ticketTypes:
+          type: array
+          items:
+            type: string

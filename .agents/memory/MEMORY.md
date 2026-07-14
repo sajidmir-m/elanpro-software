@@ -1,0 +1,1 @@
+- [Elanpro platform overview](elanpro-platform.md) — full-stack service ticket dashboard: react-vite frontend at /, Express API at /api, Drizzle/PostgreSQL DB

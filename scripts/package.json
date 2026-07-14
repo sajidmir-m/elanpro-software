@@ -8,7 +8,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "catalog:",
+    "bcrypt": "^6.0.0",
     "tsx": "catalog:"
   }
 }

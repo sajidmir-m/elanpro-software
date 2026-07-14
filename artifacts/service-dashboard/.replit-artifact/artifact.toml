@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Service Ticket Reporting Platform"
+version = "1.0.0"
+id = "artifacts/service-dashboard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21299
+
+[services.development]
+run = "pnpm --filter @workspace/service-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/service-dashboard", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/service-dashboard/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21299"
+BASE_PATH = "/"
