@@ -16,6 +16,7 @@ node_modules/
 dist/
 **/dist/
 /public/
+/api/app.mjs
 out-tsc/
 *.tsbuildinfo
 artifacts/desktop/release/
