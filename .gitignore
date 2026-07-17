@@ -15,6 +15,7 @@ node_modules/
 # =============================================================================
 dist/
 **/dist/
+/public/
 out-tsc/
 *.tsbuildinfo
 artifacts/desktop/release/

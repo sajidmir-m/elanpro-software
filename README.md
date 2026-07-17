@@ -130,7 +130,7 @@ Do **not** commit `.env` (secrets stay in Vercel dashboard only).
 3. Vercel reads root `vercel.json` automatically — leave defaults:
    - **Framework:** Vite
    - **Build Command:** `pnpm --filter @workspace/service-dashboard run build`
-   - **Output Directory:** `artifacts/service-dashboard/dist/public`
+   - **Output Directory:** `public` (auto-synced from the Vite build)
    - **Install Command:** `pnpm install`
 
 ### Step 3 — Add environment variables

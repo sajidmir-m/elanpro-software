@@ -3,8 +3,8 @@
   "version": 2,
   "framework": "vite",
   "installCommand": "pnpm install --filter \"!@workspace/desktop\"",
-  "buildCommand": "pnpm --filter @workspace/service-dashboard run build",
-  "outputDirectory": "artifacts/service-dashboard/dist/public",
+  "buildCommand": "pnpm --filter @workspace/service-dashboard run build && node scripts/sync-vercel-output.mjs",
+  "outputDirectory": "public",
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
