@@ -3,12 +3,13 @@
   "version": 2,
   "framework": "vite",
   "installCommand": "pnpm install --filter \"!@workspace/desktop\"",
-  "buildCommand": "pnpm --filter @workspace/service-dashboard run build && node scripts/sync-vercel-output.mjs",
+  "buildCommand": "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/service-dashboard run build && node scripts/sync-vercel-output.mjs",
   "outputDirectory": "public",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 60,
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": "artifacts/api-server/dist/**"
     }
   },
   "rewrites": [

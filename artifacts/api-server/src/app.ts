@@ -1,10 +1,17 @@
-import express, { type Express } from "express";
+import express, {
+  type Application,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import cors from "cors";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-const app: Express = express();
+const app: Application = express();
+const isServerless = Boolean(process.env.VERCEL);
 
 function resolveAllowedOrigins(): string[] | true {
   const origins = new Set<string>();
@@ -31,25 +38,27 @@ function resolveAllowedOrigins(): string[] | true {
 
 const allowedOrigins = resolveAllowedOrigins();
 
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+if (!isServerless) {
+  app.use(
+    pinoHttp({
+      logger,
+      serializers: {
+        req(req: IncomingMessage & { id?: string }) {
+          return {
+            id: req.id,
+            method: req.method,
+            url: req.url?.split("?")[0],
+          };
+        },
+        res(res: ServerResponse) {
+          return {
+            statusCode: res.statusCode,
+          };
+        },
       },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  }),
-);
+    }),
+  );
+}
 
 app.use(
   cors({
@@ -65,7 +74,7 @@ app.use(
   }),
 );
 
-app.use((_req, res, next) => {
+app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
