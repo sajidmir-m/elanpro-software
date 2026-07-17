@@ -2,13 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "framework": "vite",
-  "installCommand": "pnpm install",
-  "buildCommand": "node scripts/prepare-vercel.mjs && pnpm --filter @workspace/service-dashboard run build",
+  "installCommand": "pnpm install --filter \"!@workspace/desktop\"",
+  "buildCommand": "pnpm --filter @workspace/service-dashboard run build",
   "outputDirectory": "artifacts/service-dashboard/dist/public",
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://REPLACE_WITH_YOUR_API_HOST/api/:path*"
+      "source": "/api/(.*)",
+      "destination": "/api"
     },
     {
       "source": "/((?!api/).*)",

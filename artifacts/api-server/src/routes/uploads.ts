@@ -6,9 +6,12 @@ import { processExcelUpload } from "../lib/excel-parser";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+const isServerless = Boolean(process.env.VERCEL);
+const maxUploadBytes = isServerless ? 4 * 1024 * 1024 : 50 * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: maxUploadBytes },
 });
 
 router.get("/uploads", requireAuth, requireUploadAccess, async (_req, res): Promise<void> => {
@@ -63,6 +66,30 @@ router.post(
 
     if (error || !uploadRecord) {
       res.status(500).json({ error: error?.message ?? "Failed to create upload record" });
+      return;
+    }
+
+    if (isServerless) {
+      try {
+        await processExcelUpload(file.buffer, fileType, uploadRecord.id);
+        const { data: updated, error: refreshError } = await supabase
+          .from("uploads")
+          .select("*")
+          .eq("id", uploadRecord.id)
+          .single();
+
+        if (refreshError || !updated) {
+          res.status(500).json({ error: refreshError?.message ?? "Upload finished but status refresh failed" });
+          return;
+        }
+
+        res.status(201).json(formatUpload(updated as UploadRow));
+      } catch (err) {
+        logger.error({ err, uploadId: uploadRecord.id }, "Upload processing failed");
+        res.status(500).json({
+          error: err instanceof Error ? err.message : "Upload processing failed",
+        });
+      }
       return;
     }
 

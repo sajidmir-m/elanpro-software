@@ -81,8 +81,8 @@ pnpm run dev:desktop
 
 ### Production installer
 
-1. Deploy the API (see below) and note the public URL.
-2. Set `VITE_API_URL` in `.env` to your API origin (e.g. `https://report-automation-api.onrender.com`).
+1. Deploy to Vercel (see below) and note your app URL.
+2. Set `VITE_API_URL` in `.env` to your Vercel URL (e.g. `https://your-app.vercel.app`).
 3. Build the installer:
 
 ```bash
@@ -100,79 +100,100 @@ Output: `artifacts/desktop/release/` — Windows `.exe` (NSIS), macOS `.dmg`, Li
 
 ---
 
-## Vercel Production Deployment
+## Deploy on Vercel (frontend + API together)
 
-### Architecture
+Everything runs on **one Vercel project** — React UI and Express API on the same domain.
 
 ```
-[Vercel — React SPA]  ──rewrite /api/*──▶  [Render/Railway — Express API]
-         │                                           │
-         └──────── Supabase Auth (browser) ──────────┘
-                           │
-                     [Supabase PostgreSQL]
+https://your-app.vercel.app          → React dashboard
+https://your-app.vercel.app/api/*    → Express API (serverless)
+                              ↓
+                      Supabase PostgreSQL
 ```
 
-The Express API runs as a long-lived Node process (Render, Railway, Fly.io). Vercel hosts the static frontend and proxies `/api/*` to your API host.
+No Render or Railway needed.
 
-### Step 1 — Deploy API
-
-**Option A — Render (recommended, `render.yaml` included):**
-
-1. Connect repo to [Render](https://render.com).
-2. Create a **Web Service** from `render.yaml`.
-3. Set secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FRONTEND_URL`.
-
-**Option B — Railway / Fly.io:**
+### Step 1 — Push to GitHub
 
 ```bash
-# Build & start
-pnpm --filter @workspace/api-server run build
-node --enable-source-maps artifacts/api-server/dist/index.mjs
+git add .
+git commit -m "Prepare for Vercel deployment"
+git push origin main
 ```
 
-Set env vars:
+Do **not** commit `.env` (secrets stay in Vercel dashboard only).
 
-| Variable | Value |
-|----------|-------|
-| `SUPABASE_URL` | Your Supabase URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key |
-| `FRONTEND_URL` | `https://your-app.vercel.app` |
-| `PORT` | `8080` |
-| `NODE_ENV` | `production` |
+### Step 2 — Import project in Vercel
 
-Health check: `GET /api/healthz`
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. **Import** your GitHub repository
+3. Vercel reads root `vercel.json` automatically — leave defaults:
+   - **Framework:** Vite
+   - **Build Command:** `pnpm --filter @workspace/service-dashboard run build`
+   - **Output Directory:** `artifacts/service-dashboard/dist/public`
+   - **Install Command:** `pnpm install`
 
-### Step 2 — Deploy frontend to Vercel
+### Step 3 — Add environment variables
 
-1. Import the repo in [Vercel](https://vercel.com).
-2. Framework preset: **Vite** (or use root `vercel.json`).
-3. Set environment variables:
+In Vercel → Project → **Settings → Environment Variables**, add:
 
-| Variable | Value |
-|----------|-------|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `API_ORIGIN` | Your API URL (e.g. `https://report-automation-api.onrender.com`) |
-| `BASE_PATH` | `/` |
+| Variable | Value | Environments |
+|----------|-------|--------------|
+| `VITE_SUPABASE_URL` | `https://xxxxx.supabase.co` | Production, Preview, Development |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase **anon** key | Production, Preview, Development |
+| `SUPABASE_URL` | Same Supabase project URL | Production, Preview, Development |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase **service_role** key | Production, Preview, Development |
+| `NODE_ENV` | `production` | Production |
 
-4. Deploy. The build runs `scripts/prepare-vercel.mjs` to inject `API_ORIGIN` into API rewrites.
+You do **not** need `VITE_API_URL` or `API_ORIGIN` on Vercel — the frontend calls `/api/*` on the same domain.
 
-**Alternative:** Set `VITE_API_URL` instead of using rewrites — the frontend will call the API directly (ensure `FRONTEND_URL` on the API includes your Vercel domain).
+### Step 4 — Deploy
 
-### Step 3 — Supabase auth
+Click **Deploy**. When it finishes, open:
 
-In **Supabase Dashboard → Authentication → URL Configuration**, add:
+```text
+https://your-app.vercel.app/api/healthz
+```
 
-- Site URL: `https://your-app.vercel.app`
-- Redirect URLs: `https://your-app.vercel.app/**`
+You should see a healthy response. Then open `https://your-app.vercel.app` and log in.
 
-### Deploy via CLI
+### Step 5 — Supabase auth URLs
+
+In **Supabase Dashboard → Authentication → URL Configuration**:
+
+| Field | Value |
+|-------|-------|
+| Site URL | `https://your-app.vercel.app` |
+| Redirect URLs | `https://your-app.vercel.app/**` |
+
+### Deploy via CLI (optional)
 
 ```bash
-# Set API_ORIGIN in your shell or .env
-export API_ORIGIN=https://your-api.onrender.com
+npm i -g vercel
+vercel login
+vercel link
+vercel env add VITE_SUPABASE_URL
+vercel env add VITE_SUPABASE_ANON_KEY
+vercel env add SUPABASE_URL
+vercel env add SUPABASE_SERVICE_ROLE_KEY
 pnpm run deploy:vercel
 ```
+
+### Vercel limits to know
+
+| Topic | Limit |
+|-------|-------|
+| Excel file uploads | **4 MB max** on Vercel serverless |
+| Function timeout | **10s** (Hobby) / **60s** (Pro) — large uploads may need Pro |
+| Cold starts | First request after idle can take a few seconds on Hobby |
+
+For very large Excel files or always-on API, use Render (`render.yaml`) as an alternative.
+
+---
+
+## Alternative: split hosting (Render + Vercel)
+
+If you prefer a separate API server, deploy API to Render using `render.yaml` and set `VITE_API_URL` on Vercel to your Render URL. See `render.yaml` for details.
 
 ---
 
@@ -201,9 +222,10 @@ lib/
   api-spec/               OpenAPI spec
   api-zod/                Generated Zod types
   api-client-react/       Generated React Query hooks
-scripts/                  Seed + Vercel prep scripts
-vercel.json               Vercel production config
-render.yaml               Render API deployment blueprint
+api/                      Vercel serverless entry (Express API)
+scripts/                  Seed scripts
+vercel.json               Vercel config (frontend + API)
+render.yaml               Optional split API hosting
 .env.example              Environment template
 ```
 

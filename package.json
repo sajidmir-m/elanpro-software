@@ -12,7 +12,7 @@
     "dev:desktop": "pnpm --filter @workspace/desktop run dev",
     "build:desktop": "pnpm --filter @workspace/desktop run build",
     "deploy:pages": "pnpm --filter @workspace/service-dashboard run build && wrangler pages deploy artifacts/service-dashboard/dist/public --project-name=report-automation-hub",
-    "deploy:vercel": "node scripts/prepare-vercel.mjs && vercel deploy --prod",
+    "deploy:vercel": "vercel deploy --prod",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "db:seed": "pnpm --filter @workspace/scripts run seed"

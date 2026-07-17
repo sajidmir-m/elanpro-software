@@ -7,15 +7,26 @@ import { logger } from "./lib/logger";
 const app: Express = express();
 
 function resolveAllowedOrigins(): string[] | true {
+  const origins = new Set<string>();
+
   const raw = process.env["FRONTEND_URL"]?.trim();
-  if (!raw) {
+  if (raw) {
+    for (const origin of raw.split(",")) {
+      const trimmed = origin.trim();
+      if (trimmed) origins.add(trimmed);
+    }
+  }
+
+  for (const key of ["VERCEL_URL", "VERCEL_BRANCH_URL"] as const) {
+    const host = process.env[key]?.trim();
+    if (host) origins.add(`https://${host}`);
+  }
+
+  if (origins.size === 0) {
     return process.env["NODE_ENV"] === "production" ? [] : true;
   }
 
-  return raw
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  return [...origins];
 }
 
 const allowedOrigins = resolveAllowedOrigins();
