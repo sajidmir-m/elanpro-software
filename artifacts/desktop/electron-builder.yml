@@ -1,0 +1,45 @@
+appId: com.elanpro.service-ops
+productName: ELANPRO Service Ops
+copyright: Copyright © ELANPRO
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - src/**/*
+  - ui/**/*
+  - package.json
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.png
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ELANPRO Service Ops
+
+mac:
+  target:
+    - dmg
+  icon: resources/icon.png
+  category: public.app-category.business
+  artifactName: ${productName}-${version}.${ext}
+
+linux:
+  target:
+    - AppImage
+  icon: resources/icon.png
+  category: Office
+  artifactName: ${productName}-${version}.${ext}
+
+publish: null

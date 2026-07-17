@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { useGetMe, User } from '@workspace/api-client-react';
-import { useLocation } from 'wouter';
+import { createContext, useContext, useEffect, useState } from "react";
+import { useGetMe, User } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
+import { supabase } from "./supabase";
 
 interface AuthContextType {
   user: User | null;
@@ -21,12 +22,33 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [, setLocation] = useLocation();
   const [localUser, setLocalUser] = useState<User | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setHasSession(!!data.session);
+      setSessionReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasSession(!!session);
+      if (!session) {
+        setLocalUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const { data: user, isLoading: queryLoading, error } = useGetMe({
     query: {
+      enabled: sessionReady && hasSession,
       retry: false,
       refetchOnWindowFocus: false,
-    }
+    },
   });
 
   useEffect(() => {
@@ -35,14 +57,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (sessionReady && !hasSession && window.location.pathname !== "/login") {
+      setLocation("/login");
+    }
+  }, [sessionReady, hasSession, setLocation]);
+
   const loginContext = (newUser: User) => setLocalUser(newUser);
   const logoutContext = () => setLocalUser(null);
 
-  const isLoading = queryLoading && !localUser && !error;
-  const isAuthenticated = !!localUser;
+  const isLoading = !sessionReady || (hasSession && queryLoading && !localUser && !error);
+  const isAuthenticated = hasSession && !!localUser;
 
   return (
-    <AuthContext.Provider value={{ user: localUser, isLoading, isAuthenticated, loginContext, logoutContext }}>
+    <AuthContext.Provider
+      value={{ user: localUser, isLoading, isAuthenticated, loginContext, logoutContext }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -50,13 +80,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => useContext(AuthContext);
 
-export const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
+export const ProtectedRoute = ({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles?: string[];
+}) => {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && location !== '/login') {
-      setLocation('/login');
+    if (!isLoading && !isAuthenticated && location !== "/login") {
+      setLocation("/login");
     }
   }, [isLoading, isAuthenticated, location, setLocation]);
 
@@ -77,7 +113,9 @@ export const ProtectedRoute = ({ children, allowedRoles }: { children: React.Rea
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background text-center">
         <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
-        <p className="mt-2 text-sm text-muted-foreground">You don't have permission to view this page.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          You don&apos;t have permission to view this page.
+        </p>
       </div>
     );
   }

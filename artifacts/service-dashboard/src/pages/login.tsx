@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useLogin, getGetMeQueryKey } from "@workspace/api-client-react";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,10 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { resolveApiUrl } from "@/lib/api-config";
+import { supabase } from "@/lib/supabase";
 import { Activity } from "lucide-react";
+import { useState } from "react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -22,32 +25,54 @@ export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { loginContext } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const loginMutation = useLogin({
-    mutation: {
-      onSuccess: (data) => {
-        loginContext(data.user);
-        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-        toast({ title: "Welcome back", description: "Successfully logged in." });
-        setLocation("/");
-      },
-      onError: (err) => {
+  const onSubmit = async (data: z.infer<typeof loginSchema>) => {
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (error) {
         toast({
           variant: "destructive",
           title: "Login Failed",
-          description: err.error?.error || "Invalid credentials",
+          description: error.message,
         });
-      },
-    },
-  });
+        return;
+      }
 
-  const onSubmit = (data: z.infer<typeof loginSchema>) => {
-    loginMutation.mutate({ data });
+      const meResponse = await fetch(resolveApiUrl("/api/auth/me"), {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (!meResponse.ok) {
+        throw new Error("Failed to load user profile");
+      }
+
+      const profile = await meResponse.json();
+      loginContext(profile);
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      toast({ title: "Welcome back", description: "Successfully logged in." });
+      setLocation("/");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: err instanceof Error ? err.message : "Invalid credentials",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -95,8 +120,8 @@ export default function Login() {
                   )}
                 />
 
-                <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-                  {loginMutation.isPending ? "Authenticating..." : "Sign In"}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Authenticating..." : "Sign In"}
                 </Button>
               </form>
             </Form>
@@ -109,9 +134,9 @@ export default function Login() {
         <div className="relative z-10 flex flex-col justify-end p-12 text-primary-foreground w-full">
           <blockquote className="space-y-2 max-w-xl">
             <p className="text-lg font-medium leading-relaxed">
-              "Efficiency in service operations translates directly to equipment reliability. 
-              Our command center ensures every field ticket is tracked, analyzed, and resolved 
-              with absolute precision."
+              &quot;Efficiency in service operations translates directly to equipment reliability.
+              Our command center ensures every field ticket is tracked, analyzed, and resolved
+              with absolute precision.&quot;
             </p>
             <footer className="text-sm font-mono text-primary-foreground/70">
               — Service Operations Protocol

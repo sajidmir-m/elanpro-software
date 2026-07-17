@@ -8,13 +8,14 @@
 import type { UserRole } from './userRole';
 
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: UserRole;
   isActive: boolean;
   permissions: string[];
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  department?: string | null;
   createdAt?: string;
 }

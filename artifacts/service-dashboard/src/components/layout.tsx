@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -32,6 +33,7 @@ import {
   Activity,
   BoxSelect,
   Percent,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -41,17 +43,12 @@ export function AppSidebar() {
   const queryClient = useQueryClient();
   const { state } = useSidebar();
 
-  const logoutMutation = useLogout({
-    mutation: {
-      onSuccess: () => {
-        logoutContext();
-        queryClient.setQueryData(getGetMeQueryKey(), null);
-        setLocation("/login");
-      },
-    },
-  });
-
-  const handleLogout = () => logoutMutation.mutate();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    logoutContext();
+    queryClient.setQueryData(getGetMeQueryKey(), null);
+    setLocation("/login");
+  };
 
   if (!user) return null;
 
@@ -68,19 +65,20 @@ export function AppSidebar() {
       group: "Operations",
       items: [
         { label: "Dashboard", href: "/", icon: LayoutDashboard, show: true },
-        { label: "Active Tickets", href: "/active-tickets", icon: Ticket, show: canAccess('active_tickets') },
-        { label: "Closed Tickets", href: "/closed-tickets", icon: CheckCircle2, show: canAccess('closed_tickets') },
+        { label: "Live Operations", href: "/active-tickets", icon: Ticket, show: canAccess('active_tickets') },
+        { label: "Call Age", href: "/call-age", icon: Clock, show: canAccess('active_tickets') },
+        { label: "Closure Analytics", href: "/closed-tickets", icon: CheckCircle2, show: canAccess('closed_tickets') },
       ],
     },
     {
       group: "Analysis Reports",
       items: [
         { label: "Product Failure", href: "/reports/product-failure", icon: AlertTriangle, show: canAccess('product_failure') },
-        { label: "Component Failure", href: "/reports/component-failure", icon: Wrench, show: canAccess('component_failure') },
+        { label: "Parts & Consumption", href: "/reports/component-failure", icon: Wrench, show: canAccess('component_failure') },
         { label: "Warranty Analysis", href: "/reports/warranty", icon: Percent, show: canAccess('warranty') },
         { label: "Sales vs Complaint", href: "/reports/sales-complaint", icon: Activity, show: canAccess('sales_complaint') },
         { label: "TAT Deep-dive", href: "/reports/tat", icon: BarChart3, show: canAccess('tat_analysis') },
-        { label: "MRF Analysis", href: "/reports/mrf", icon: BoxSelect, show: canAccess('mrf_analysis') },
+        { label: "Parts & MRF", href: "/reports/mrf", icon: BoxSelect, show: canAccess('mrf_analysis') },
       ],
     },
     {
@@ -164,7 +162,17 @@ export function AppSidebar() {
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-sm text-muted-foreground font-mono">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) return <>{children}</>;
 
   return (

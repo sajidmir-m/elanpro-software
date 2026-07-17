@@ -13,6 +13,7 @@ export interface UserUpdate {
   role?: UserUpdateRole;
   isActive?: boolean;
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  department?: string | null;
   permissions?: string[];
 }

@@ -18,6 +18,7 @@ export type FilterState = {
   state?: string | null;
   ticketType?: string | null;
   warrantyType?: string | null;
+  warranty?: "all" | "in" | "out" | null;
 };
 
 interface FilterPanelProps {

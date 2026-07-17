@@ -189,7 +189,7 @@ export const UpdateUserPermissionsResponse = zod.object({
 export const ListUploadsResponseItem = zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),
@@ -202,14 +202,14 @@ export const ListUploadsResponse = zod.array(ListUploadsResponseItem)
  * @summary Upload Excel data file (active tickets, closed tickets, or MRF)
  */
 export const UploadDataBody = zod.object({
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
   "file": zod.instanceof(File).optional()
 })
 
 export const UploadDataResponse = zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),
@@ -265,7 +265,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "recentUploads": zod.array(zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),

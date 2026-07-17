@@ -1,61 +1,82 @@
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import bcrypt from "bcrypt";
+import { getServiceClient } from "@workspace/supabase";
+
+const ADMIN_PERMISSIONS = [
+  "dashboard",
+  "active_tickets",
+  "closed_tickets",
+  "product_failure",
+  "component_failure",
+  "warranty",
+  "sales_complaint",
+  "tat_analysis",
+  "mrf_analysis",
+  "schedules",
+  "uploads",
+  "users",
+];
+
+const MANAGER_PERMISSIONS = [
+  "dashboard",
+  "active_tickets",
+  "closed_tickets",
+  "product_failure",
+  "warranty",
+  "tat_analysis",
+];
 
 async function seed() {
-  console.log("Seeding admin user...");
+  const supabase = getServiceClient();
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.email, "admin@elanpro.net"));
+  console.log("Seeding users via Supabase Auth...");
 
-  if (existing.length > 0) {
+  const { data: existingAdmin } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", "admin@elanpro.net")
+    .maybeSingle();
+
+  if (existingAdmin) {
     console.log("Admin user already exists, skipping.");
     process.exit(0);
   }
 
-  const passwordHash = await bcrypt.hash("Admin@1234", 10);
-
-  await db.insert(usersTable).values({
-    name: "System Admin",
+  const { data: adminAuth, error: adminError } = await supabase.auth.admin.createUser({
     email: "admin@elanpro.net",
-    passwordHash,
-    role: "admin",
-    isActive: true,
-    permissions: [
-      "dashboard",
-      "active_tickets",
-      "closed_tickets",
-      "reports:product_failure",
-      "reports:component_failure",
-      "reports:warranty",
-      "reports:sales_complaint",
-      "reports:tat",
-      "reports:mrf",
-      "schedules",
-      "uploads",
-      "users",
-    ],
+    password: "Admin@1234",
+    email_confirm: true,
+    user_metadata: { name: "System Admin", role: "admin" },
   });
 
-  // Also seed a manager user
-  const managerHash = await bcrypt.hash("Manager@1234", 10);
-  const [admin] = await db.select().from(usersTable).where(eq(usersTable.email, "admin@elanpro.net"));
+  if (adminError || !adminAuth.user) {
+    console.error("Failed to create admin:", adminError?.message);
+    process.exit(1);
+  }
 
-  await db.insert(usersTable).values({
-    name: "Vijay Kumar",
+  await supabase
+    .from("profiles")
+    .update({ role: "admin", permissions: ADMIN_PERMISSIONS })
+    .eq("id", adminAuth.user.id);
+
+  const { data: managerAuth, error: managerError } = await supabase.auth.admin.createUser({
     email: "vijay.kumar@elanpro.net",
-    passwordHash: managerHash,
-    role: "ash",
-    isActive: true,
-    managerId: admin?.id ?? null,
-    permissions: [
-      "dashboard",
-      "active_tickets",
-      "closed_tickets",
-      "reports:product_failure",
-      "reports:warranty",
-      "reports:tat",
-    ],
+    password: "Manager@1234",
+    email_confirm: true,
+    user_metadata: { name: "Vijay Kumar", role: "ash" },
   });
+
+  if (managerError || !managerAuth.user) {
+    console.error("Failed to create manager:", managerError?.message);
+    process.exit(1);
+  }
+
+  await supabase
+    .from("profiles")
+    .update({
+      role: "ash",
+      manager_id: adminAuth.user.id,
+      permissions: MANAGER_PERMISSIONS,
+    })
+    .eq("id", managerAuth.user.id);
 
   console.log("✓ Seeded admin user: admin@elanpro.net / Admin@1234");
   console.log("✓ Seeded ASH user: vijay.kumar@elanpro.net / Manager@1234");

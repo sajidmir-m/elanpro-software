@@ -220,3 +220,19 @@
     inset: -1px;
   }
 }
+
+/* Desktop app (Electron) — native window chrome */
+html.desktop-app,
+html.desktop-app body {
+  overflow: hidden;
+  user-select: none;
+}
+
+html.desktop-app body {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+html.desktop-app #root {
+  min-height: 100vh;
+}

@@ -111,10 +111,12 @@ async function buildAll() {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';
 import __bannerUrl from 'node:url';
+import { config as __bannerLoadEnv } from 'dotenv';
 
 globalThis.require = __bannerCrReq(import.meta.url);
 globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
+__bannerLoadEnv({ path: __bannerPath.resolve(globalThis.__dirname, '../../../.env') });
     `,
     },
   });

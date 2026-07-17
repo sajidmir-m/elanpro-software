@@ -1,38 +1,22 @@
 import { Router, type IRouter } from "express";
-import { db, schedulesTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { getServiceClient, formatSchedule, type ScheduleRow } from "@workspace/supabase";
 import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
 
-function formatSchedule(s: typeof schedulesTable.$inferSelect) {
-  let filters: unknown = null;
-  try {
-    if (s.filters) filters = JSON.parse(s.filters);
-  } catch {
-    filters = null;
-  }
-  return {
-    id: s.id,
-    name: s.name,
-    reportTypes: s.reportTypes ?? [],
-    frequency: s.frequency,
-    weekDay: s.weekDay ?? null,
-    monthDay: s.monthDay ?? null,
-    customCron: s.customCron ?? null,
-    audiences: s.audiences ?? [],
-    productCategories: s.productCategories ?? [],
-    filters,
-    isActive: s.isActive,
-    lastRunAt: s.lastRunAt?.toISOString() ?? null,
-    nextRunAt: s.nextRunAt?.toISOString() ?? null,
-    createdAt: s.createdAt?.toISOString() ?? null,
-  };
-}
+router.get("/schedules", requireAuth, async (_req, res): Promise<void> => {
+  const supabase = getServiceClient();
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-router.get("/schedules", requireAuth, async (req, res): Promise<void> => {
-  const schedules = await db.select().from(schedulesTable).orderBy(desc(schedulesTable.createdAt));
-  res.json(schedules.map(formatSchedule));
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.json((data as ScheduleRow[]).map(formatSchedule));
 });
 
 router.post("/schedules", requireAuth, async (req, res): Promise<void> => {
@@ -65,74 +49,95 @@ router.post("/schedules", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [schedule] = await db
-    .insert(schedulesTable)
-    .values({
+  const supabase = getServiceClient();
+  const { data: schedule, error } = await supabase
+    .from("schedules")
+    .insert({
       name,
-      reportTypes: reportTypes ?? [],
+      report_types: reportTypes ?? [],
       frequency,
-      weekDay: weekDay ?? null,
-      monthDay: monthDay ?? null,
-      customCron: customCron ?? null,
+      week_day: weekDay ?? null,
+      month_day: monthDay ?? null,
+      custom_cron: customCron ?? null,
       audiences: audiences ?? [],
-      productCategories: productCategories ?? [],
-      filters: filters ? JSON.stringify(filters) : null,
-      isActive: isActive ?? true,
+      product_categories: productCategories ?? [],
+      filters: filters ?? null,
+      is_active: isActive ?? true,
     })
-    .returning();
+    .select("*")
+    .single();
 
-  res.status(201).json(formatSchedule(schedule));
+  if (error || !schedule) {
+    res.status(500).json({ error: error?.message ?? "Failed to create schedule" });
+    return;
+  }
+
+  res.status(201).json(formatSchedule(schedule as ScheduleRow));
 });
 
 router.get("/schedules/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
+  const supabase = getServiceClient();
 
-  const [schedule] = await db.select().from(schedulesTable).where(eq(schedulesTable.id, id));
-  if (!schedule) {
+  const { data: schedule, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !schedule) {
     res.status(404).json({ error: "Schedule not found" });
     return;
   }
-  res.json(formatSchedule(schedule));
+
+  res.json(formatSchedule(schedule as ScheduleRow));
 });
 
 router.patch("/schedules/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
-
-  const updates: Record<string, unknown> = {};
   const body = req.body as Record<string, unknown>;
 
+  const updates: Record<string, unknown> = {};
   if (body.name !== undefined) updates.name = body.name;
-  if (body.reportTypes !== undefined) updates.reportTypes = body.reportTypes;
+  if (body.reportTypes !== undefined) updates.report_types = body.reportTypes;
   if (body.frequency !== undefined) updates.frequency = body.frequency;
-  if (body.weekDay !== undefined) updates.weekDay = body.weekDay;
-  if (body.monthDay !== undefined) updates.monthDay = body.monthDay;
-  if (body.customCron !== undefined) updates.customCron = body.customCron;
+  if (body.weekDay !== undefined) updates.week_day = body.weekDay;
+  if (body.monthDay !== undefined) updates.month_day = body.monthDay;
+  if (body.customCron !== undefined) updates.custom_cron = body.customCron;
   if (body.audiences !== undefined) updates.audiences = body.audiences;
-  if (body.productCategories !== undefined) updates.productCategories = body.productCategories;
-  if (body.filters !== undefined) updates.filters = body.filters ? JSON.stringify(body.filters) : null;
-  if (body.isActive !== undefined) updates.isActive = body.isActive;
+  if (body.productCategories !== undefined) updates.product_categories = body.productCategories;
+  if (body.filters !== undefined) updates.filters = body.filters ?? null;
+  if (body.isActive !== undefined) updates.is_active = body.isActive;
 
-  const [schedule] = await db
-    .update(schedulesTable)
-    .set(updates)
-    .where(eq(schedulesTable.id, id))
-    .returning();
+  const supabase = getServiceClient();
+  const { data: schedule, error } = await supabase
+    .from("schedules")
+    .update(updates)
+    .eq("id", id)
+    .select("*")
+    .single();
 
-  if (!schedule) {
+  if (error || !schedule) {
     res.status(404).json({ error: "Schedule not found" });
     return;
   }
 
-  res.json(formatSchedule(schedule));
+  res.json(formatSchedule(schedule as ScheduleRow));
 });
 
 router.delete("/schedules/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
+  const supabase = getServiceClient();
 
-  await db.delete(schedulesTable).where(eq(schedulesTable.id, id));
+  const { error } = await supabase.from("schedules").delete().eq("id", id);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
   res.json({ message: "Schedule deleted" });
 });
 

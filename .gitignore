@@ -1,49 +1,108 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# =============================================================================
+# Dependencies
+# =============================================================================
+node_modules/
 
-# compiled output
-dist
-tmp
-out-tsc
+# =============================================================================
+# Environment & secrets (never commit real keys)
+# =============================================================================
+.env
+.env.*
+!.env.example
+
+# =============================================================================
+# Build output
+# =============================================================================
+dist/
+**/dist/
+out-tsc/
 *.tsbuildinfo
-.expo
-.expo-shared
+artifacts/desktop/release/
+artifacts/desktop/ui/
 
-# dependencies
-node_modules
+# =============================================================================
+# Package managers (pnpm workspace — do not use npm/yarn lockfiles)
+# =============================================================================
+package-lock.json
+yarn.lock
+pnpm-debug.log*
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# =============================================================================
+# Logs & diagnostics
+# =============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+testem.log
+libpeerconnection.log
 
-# IDE - VSCode
+# =============================================================================
+# Test & coverage
+# =============================================================================
+coverage/
+.nyc_output/
+
+# =============================================================================
+# Vite / frontend tooling
+# =============================================================================
+.vite/
+vite.config.ts.timestamp-*
+
+# =============================================================================
+# Cloudflare
+# =============================================================================
+.wrangler/
+.dev.vars
+
+# =============================================================================
+# Supabase local dev
+# =============================================================================
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# =============================================================================
+# IDE & editors
+# =============================================================================
+.idea/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+*.sublime-workspace
+.project
+.classpath
+.settings/
+.c9/
+*.launch
 
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
+# =============================================================================
+# OS files
+# =============================================================================
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
 
+# =============================================================================
+# Misc / legacy
+# =============================================================================
+.cache/
+.local/
+tmp/
+.sass-cache/
+/connect.lock
+/typings
+.expo/
+.expo-shared/
+
+# Cursor / agent (local only)
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
-.cache/
-.local/
+# Uploaded runtime files (if stored locally during dev)
+uploads/
+attached_assets/

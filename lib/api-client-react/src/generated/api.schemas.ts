@@ -28,20 +28,23 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 export const UserRole = {
   admin: 'admin',
   manager: 'manager',
+  employee: 'employee',
   ash: 'ash',
   rsh: 'rsh',
   service_partner: 'service_partner',
 } as const;
 
 export interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: UserRole;
   isActive: boolean;
   permissions: string[];
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  /** @nullable */
+  department?: string | null;
   createdAt?: string;
 }
 
@@ -55,6 +58,7 @@ export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 export const UserInputRole = {
   admin: 'admin',
   manager: 'manager',
+  employee: 'employee',
   ash: 'ash',
   rsh: 'rsh',
   service_partner: 'service_partner',
@@ -66,7 +70,9 @@ export interface UserInput {
   password: string;
   role: UserInputRole;
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  /** @nullable */
+  department?: string | null;
   permissions?: string[];
 }
 
@@ -76,6 +82,7 @@ export type UserUpdateRole = typeof UserUpdateRole[keyof typeof UserUpdateRole];
 export const UserUpdateRole = {
   admin: 'admin',
   manager: 'manager',
+  employee: 'employee',
   ash: 'ash',
   rsh: 'rsh',
   service_partner: 'service_partner',
@@ -87,7 +94,9 @@ export interface UserUpdate {
   role?: UserUpdateRole;
   isActive?: boolean;
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  /** @nullable */
+  department?: string | null;
   permissions?: string[];
 }
 
@@ -102,6 +111,7 @@ export const UploadFileType = {
   active_tickets: 'active_tickets',
   closed_tickets: 'closed_tickets',
   mrf_data: 'mrf_data',
+  sales_data: 'sales_data',
 } as const;
 
 export type UploadStatus = typeof UploadStatus[keyof typeof UploadStatus];
@@ -131,6 +141,7 @@ export const UploadInputFileType = {
   active_tickets: 'active_tickets',
   closed_tickets: 'closed_tickets',
   mrf_data: 'mrf_data',
+  sales_data: 'sales_data',
 } as const;
 
 export interface UploadInput {

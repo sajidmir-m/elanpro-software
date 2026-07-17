@@ -1,179 +1,267 @@
-import { useState } from "react";
-import { useGetActiveTickets, getGetActiveTicketsQueryKey } from "@workspace/api-client-react";
-import { FilterPanel, FilterState } from "@/components/filter-panel";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { FilterBar, type FilterBarState, type FilterField } from "@/components/filter-bar";
+import {
+  LiveOpsQuickFilters,
+  LiveOpsDataExplorer,
+  LiveOpsDrilldownDialog,
+  OpsCommandBoard,
+  OpsHeader,
+  PartnersTable,
+  StatusCallsDialog,
+  StatusMixCards,
+  WipMrfReasonsCard,
+} from "@/components/live-operations";
+import {
+  fetchLiveOperationsDashboard,
+  type AnalyticsQuery,
+  type LiveOperationsDashboard,
+  type LiveOpsDrilldownView,
+  type LiveOpsPartnerRow,
+} from "@/lib/analytics-api";
+
+const LIVE_OPS_FIELDS: FilterField[] = [
+  "search",
+  "warranty",
+  "ticketStatus",
+  "callAgeRange",
+  "dateRangeDays",
+  "region",
+  "product",
+  "category",
+  "rsh",
+  "ash",
+  "servicePartner",
+  "nationalHead",
+];
+
+const FIELD_LABELS: Partial<Record<FilterField, string>> = {
+  ash: "Reporting Manager",
+  rsh: "RSH",
+  nationalHead: "National Head",
+  region: "Region",
+  ticketStatus: "Status",
+  callAgeRange: "Call Age",
+};
+
+const AUTO_REFRESH_MS = 60_000;
+
+function toAnalyticsQuery(filters: FilterBarState): AnalyticsQuery {
+  return {
+    search: filters.search || null,
+    warranty: filters.warranty ?? "all",
+    ticketStatus: filters.ticketStatus,
+    callAgeRange: filters.callAgeRange,
+    rsh: filters.rsh,
+    ash: filters.ash,
+    nationalHead: filters.nationalHead,
+    servicePartner: filters.servicePartner,
+    product: filters.product,
+    category: filters.category,
+    region: filters.region,
+    dateRangeDays: filters.dateRangeDays,
+  };
+}
+
+function downloadPartnersCsv(data: LiveOperationsDashboard) {
+  const headers = [
+    "Rank",
+    "Partner",
+    "Open",
+    "Assigned",
+    "WIP",
+    "Critical",
+    "Avg Age",
+    "Manager",
+    "RSH",
+    "Region",
+    "Health",
+  ];
+  const rows = data.topServicePartners.map((p) => [
+    p.rank,
+    p.servicePartner,
+    p.openCalls,
+    p.assigned,
+    p.wip,
+    p.critical,
+    p.avgAge,
+    p.reportingManager,
+    p.rsh,
+    p.region ?? "",
+    p.health,
+  ]);
+  const escape = (v: unknown) => {
+    const t = String(v ?? "");
+    return t.includes(",") ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const csv = [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `live-operations-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function ActiveTickets() {
-  const [filters, setFilters] = useState<FilterState>({});
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [filters, setFilters] = useState<FilterBarState>({ warranty: "all" });
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedPartner, setSelectedPartner] = useState<LiveOpsPartnerRow | null>(null);
+  const [detailStatus, setDetailStatus] = useState<"WIP" | "MRF" | null>(null);
+  const [drilldown, setDrilldown] = useState<{
+    view: LiveOpsDrilldownView;
+    group?: string;
+  } | null>(null);
 
-  const { data: result, isLoading, error } = useGetActiveTickets({
-    ...filters,
-    page,
-    pageSize,
-  }, {
-    query: {
-      queryKey: getGetActiveTicketsQueryKey({ ...filters, page, pageSize })
-    }
+  const analyticsQuery = useMemo(() => toAnalyticsQuery(filters), [filters]);
+
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ["live-operations", analyticsQuery],
+    queryFn: () => fetchLiveOperationsDashboard(analyticsQuery),
+    placeholderData: keepPreviousData,
+    refetchInterval: autoRefresh ? AUTO_REFRESH_MS : false,
   });
 
-  const getAgeColor = (ageDays: number) => {
-    if (ageDays > 30) return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
-    if (ageDays > 15) return "bg-chart-2 text-chart-2-foreground hover:bg-chart-2/90"; // Amber
-    if (ageDays > 7) return "bg-chart-4 text-chart-4-foreground hover:bg-chart-4/90";
-    return "bg-secondary text-secondary-foreground hover:bg-secondary/90";
+  const busy = isLoading || (isFetching && !data);
+
+  const statusSummary = data?.opsOverview?.statusSummary ?? {
+    assigned: data?.kpis.assigned.value ?? 0,
+    wip: data?.kpis.wip.value ?? 0,
+    mrf: data?.kpis.mrf.value ?? 0,
+    other: 0,
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Active Tickets</h1>
-        <p className="text-sm text-muted-foreground mt-1">Explore and filter currently open service tickets.</p>
-      </div>
+    <div className="min-h-full bg-[#F7F8FA]">
+      <div className="mx-auto max-w-[1680px] space-y-4 p-4 md:p-5">
+        <OpsHeader
+          refreshedAt={data?.refreshedAt}
+          autoRefresh={autoRefresh}
+          isFetching={isFetching}
+          onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
+          onRefresh={() => refetch()}
+          onExport={() => data && downloadPartnersCsv(data)}
+        />
 
-      <FilterPanel filters={filters} onChange={(f) => { setFilters(f); setPage(1); }} />
+        <div className="space-y-2">
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            fields={LIVE_OPS_FIELDS}
+            fieldLabels={FIELD_LABELS}
+            searchPlaceholder="Search partner, region, ticket, product…"
+            sticky
+            className="rounded-xl border border-[#E7EAF0] bg-white shadow-sm"
+          />
+          <LiveOpsQuickFilters filters={filters} onChange={setFilters} />
+        </div>
 
-      {error ? (
-        <Card className="flex flex-col items-center justify-center h-64 border-dashed">
-          <AlertTriangle className="size-10 text-destructive mb-4" />
-          <h3 className="text-lg font-medium">Failed to load tickets</h3>
-          <p className="text-muted-foreground text-sm">Please try again.</p>
-        </Card>
-      ) : isLoading ? (
-        <Card className="p-6 space-y-4">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </Card>
-      ) : result ? (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-            {result.byAgeBucket.length > 0 && (
-              <Card className="p-4 flex flex-col justify-center">
-                <h3 className="text-sm font-medium mb-3">Age Distribution</h3>
-                <div className="h-32 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={result.byAgeBucket}>
-                      <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} className="font-mono" />
-                      <Tooltip cursor={{ fill: 'var(--elevate-1)' }} contentStyle={{ borderRadius: '8px' }} />
-                      <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+        {error ? (
+          <div className="flex items-center gap-3 rounded-xl bg-white p-6 text-destructive shadow-sm" role="alert">
+            <AlertCircle className="h-5 w-5" />
+            <div className="flex-1">
+              <p className="font-medium">Failed to load operations dashboard</p>
+              <p className="text-sm opacity-80">{String((error as Error).message || error)}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Status mix — 4 KPI cards with sparklines, right after filters */}
+            {busy ? (
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              data && (
+                <StatusMixCards
+                  status={statusSummary}
+                  sparkline={data.kpis.open.sparkline}
+                  onSelectStatus={(ticketStatus) => {
+                    if (ticketStatus === "WIP" || ticketStatus === "MRF") {
+                      setDetailStatus(ticketStatus);
+                      return;
+                    }
+                    setFilters((current) => ({
+                      ...current,
+                      ticketStatus: current.ticketStatus === ticketStatus ? null : ticketStatus,
+                    }));
+                  }}
+                />
+              )
             )}
-            
-            {result.byProduct.length > 0 && (
-              <Card className="p-4 flex flex-col justify-center col-span-2">
-                <h3 className="text-sm font-medium mb-3">Top Products</h3>
-                <div className="h-32 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={result.byProduct.slice(0, 6)} layout="vertical" margin={{ left: 20 }}>
-                      <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis type="category" dataKey="label" fontSize={10} tickLine={false} axisLine={false} width={120} />
-                      <Tooltip cursor={{ fill: 'var(--elevate-1)' }} contentStyle={{ borderRadius: '8px' }} />
-                      <Bar dataKey="count" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
+
+            {data?.opsOverview?.operationalReasons && (
+              <WipMrfReasonsCard reasons={data.opsOverview.operationalReasons} />
+            )}
+
+            {data?.dataCoverage && (
+              <LiveOpsDataExplorer
+                coverage={data.dataCoverage}
+                onOpen={(view) => setDrilldown({ view })}
+              />
+            )}
+
+            {busy ? (
+              <div className="space-y-3">
+                <Skeleton className="h-[220px] rounded-xl" />
+                <Skeleton className="h-[200px] rounded-xl" />
+                <Skeleton className="h-[160px] rounded-xl" />
+              </div>
+            ) : (
+              data?.opsOverview && (
+                <OpsCommandBoard
+                  overview={data.opsOverview}
+                  openCalls={data.kpis.open.value}
+                  products={data.productInsights ?? []}
+                  onSelectRegion={(region) => setFilters((f) => ({ ...f, region }))}
+                  onSelectManager={(name) => setFilters((f) => ({ ...f, ash: name }))}
+                  onSelectProduct={(product) => setFilters((f) => ({ ...f, product }))}
+                  onOpenDrilldown={(view, group) => setDrilldown({ view, group })}
+                />
+              )
+            )}
+
+            {busy ? (
+              <Skeleton className="h-[420px] rounded-xl" />
+            ) : (
+              data && (
+                <PartnersTable
+                  rows={data.topServicePartners}
+                  selected={selectedPartner}
+                  onSelect={setSelectedPartner}
+                  onClose={() => setSelectedPartner(null)}
+                />
+              )
             )}
           </div>
-
-          <Card className="overflow-hidden border-border shadow-sm">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-[120px] font-mono text-xs">Ticket ID</TableHead>
-                    <TableHead className="font-mono text-xs">Created</TableHead>
-                    <TableHead className="font-mono text-xs">Product</TableHead>
-                    <TableHead className="font-mono text-xs">Service Partner</TableHead>
-                    <TableHead className="font-mono text-xs">State</TableHead>
-                    <TableHead className="font-mono text-xs">Status</TableHead>
-                    <TableHead className="text-right font-mono text-xs">Age</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.tickets.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                        No active tickets found matching filters.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    result.tickets.map((ticket) => (
-                      <TableRow key={ticket.ticketId} className="group hover:bg-muted/50">
-                        <TableCell className="font-medium font-mono text-xs">{ticket.ticketId}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(ticket.createdOn), "dd MMM yyyy")}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">{ticket.product}</div>
-                          <div className="text-[10px] text-muted-foreground uppercase">{ticket.category}</div>
-                        </TableCell>
-                        <TableCell className="text-sm max-w-[200px] truncate" title={ticket.servicePartner}>
-                          {ticket.servicePartner}
-                        </TableCell>
-                        <TableCell className="text-sm">{ticket.state}</TableCell>
-                        <TableCell>
-                          <div className="text-xs font-medium">{ticket.status}</div>
-                          {ticket.wipSubStage && (
-                            <div className="text-[10px] text-muted-foreground">{ticket.wipSubStage}</div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge className={`font-mono ${getAgeColor(ticket.ageDays)}`} variant="secondary">
-                            {ticket.ageDays} d
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-              <div className="text-xs text-muted-foreground">
-                Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, result.total)} of{" "}
-                <span className="font-medium text-foreground">{result.total}</span> entries
-              </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="h-8 w-8 p-0"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="text-xs font-mono text-muted-foreground">Page {page}</div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={page * pageSize >= result.total}
-                  className="h-8 w-8 p-0"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </>
-      ) : null}
+        )}
+      </div>
+      <StatusCallsDialog
+        open={detailStatus != null}
+        status={detailStatus}
+        filters={analyticsQuery}
+        onOpenChange={(open) => {
+          if (!open) setDetailStatus(null);
+        }}
+      />
+      <LiveOpsDrilldownDialog
+        open={drilldown != null}
+        view={drilldown?.view ?? null}
+        initialGroup={drilldown?.group}
+        filters={analyticsQuery}
+        onOpenChange={(open) => {
+          if (!open) setDrilldown(null);
+        }}
+      />
     </div>
   );
 }

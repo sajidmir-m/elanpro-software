@@ -1,7 +1,8 @@
 import xlsx from "xlsx";
-import { db, activeTicketsTable, closedTicketsTable, mrfDataTable, uploadsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { getServiceClient, keysToSnake } from "@workspace/supabase";
 import { logger } from "./logger";
+
+type DataTable = "active_tickets" | "closed_tickets" | "mrf_data" | "sales_data";
 
 function str(v: unknown): string | undefined {
   if (v == null) return undefined;
@@ -10,9 +11,11 @@ function str(v: unknown): string | undefined {
 }
 
 function num(v: unknown): number | undefined {
-  if (v == null) return undefined;
-  const n = Number(v);
-  return isNaN(n) ? undefined : n;
+  if (v == null || v === "") return undefined;
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  const cleaned = String(v).replace(/,/g, "").trim();
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -24,12 +27,12 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 function parseRows(buffer: Buffer): Record<string, unknown>[] {
-  const wb = xlsx.read(buffer, { type: "buffer" });
+  const wb = xlsx.read(buffer, { type: "buffer", cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  return xlsx.utils.sheet_to_json(sheet, { defval: null }) as Record<string, unknown>[];
+  return xlsx.utils.sheet_to_json(sheet, { defval: null, raw: false }) as Record<string, unknown>[];
 }
 
-function mapActiveTicket(row: Record<string, unknown>, uploadId: number) {
+function mapSharedTicketFields(row: Record<string, unknown>, uploadId: number) {
   return {
     uploadId,
     ticketId: str(row["Ticket ID"]) ?? "",
@@ -63,7 +66,7 @@ function mapActiveTicket(row: Record<string, unknown>, uploadId: number) {
     wipSubStageDate: str(row["WIP Sub Stage Date"]),
     lastAction: str(row["Last Action"]),
     ticketTerritory: str(row["Ticket Territory"]),
-    components: str(row["Components"]) ?? str(JSON.stringify(row["Components"])),
+    components: str(row["Components"]),
     reOpenTicket: str(row["ReOpen Ticket"]),
     repeatTicket: str(row["Repeat Ticket"]),
     freeOfCost: str(row["Free Of Cost"]),
@@ -72,11 +75,14 @@ function mapActiveTicket(row: Record<string, unknown>, uploadId: number) {
   };
 }
 
+function mapActiveTicket(row: Record<string, unknown>, uploadId: number) {
+  return mapSharedTicketFields(row, uploadId);
+}
+
 function mapClosedTicket(row: Record<string, unknown>, uploadId: number) {
-  const base = mapActiveTicket(row, uploadId);
   return {
-    ...base,
-    paymentValue: row["Payment Value"] != null ? String(row["Payment Value"]) : undefined,
+    ...mapSharedTicketFields(row, uploadId),
+    paymentValue: num(row["Payment Value"]),
     closureRemarks: str(row["Closure Remarks"]),
     closureComments: str(row["Closure Comments"]),
     technicianClosedDate: str(row["Technician Closed Date"]),
@@ -86,7 +92,7 @@ function mapClosedTicket(row: Record<string, unknown>, uploadId: number) {
     closedFrom: str(row["Closed From"]),
     closedDate: str(row["Closed Date"]),
     totalDuration: str(row["Total Duration"]),
-    tatMinutes: row["TAT(min)"] != null ? String(row["TAT(min)"]) : undefined,
+    tatMinutes: num(row["TAT(min)"]),
     distanceTravelled: str(row["Distance Travelled(m)"]),
     closureType: str(row["Closure Type"]),
     serviceReportNumber: str(row["Service Report Number"]),
@@ -138,55 +144,139 @@ function mapMrfData(row: Record<string, unknown>, uploadId: number) {
   };
 }
 
+function mapSalesData(row: Record<string, unknown>, uploadId: number) {
+  return {
+    uploadId,
+    product: str(row["Product"]),
+    category: str(row["Category"]),
+    state: str(row["State"]),
+    servicePartnerName: str(row["Service Partner Name"]) ?? str(row["Service Partner"]),
+    periodMonth: str(row["Month"]) ?? str(row["Period"]) ?? str(row["Period Month"]),
+    quantity: num(row["Quantity"]) ?? num(row["Sales"]) ?? num(row["Sales Qty"]) ?? 0,
+  };
+}
+
+async function replaceTableData(
+  table: DataTable,
+  mapped: Record<string, unknown>[],
+  uploadId: number,
+): Promise<void> {
+  const supabase = getServiceClient();
+
+  for (const ch of chunk(mapped, 500)) {
+    const { error } = await supabase.from(table).insert(ch);
+    if (error) throw new Error(error.message);
+  }
+
+  const { error: clearError } = await supabase
+    .from(table)
+    .delete()
+    .neq("upload_id", uploadId);
+  if (clearError) throw new Error(clearError.message);
+}
+
+/**
+ * Closed tickets are authoritative. This runs after either active or closed
+ * imports so upload order cannot put completed work back into Active.
+ */
+async function removeClosedTicketsFromActive(): Promise<void> {
+  const supabase = getServiceClient();
+  const ticketIds = new Set<string>();
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("closed_tickets")
+      .select("ticket_id")
+      .range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+
+    for (const row of data) {
+      const ticketId = String(row.ticket_id ?? "").trim();
+      if (ticketId) ticketIds.add(ticketId);
+    }
+    if (data.length < 1000) break;
+    offset += 1000;
+  }
+
+  for (const ids of chunk([...ticketIds], 500)) {
+    const { error } = await supabase.from("active_tickets").delete().in("ticket_id", ids);
+    if (error) throw new Error(error.message);
+  }
+}
+
 export async function processExcelUpload(
   buffer: Buffer,
   fileType: string,
   uploadId: number,
 ): Promise<number> {
+  const supabase = getServiceClient();
   const rows = parseRows(buffer);
 
   if (rows.length === 0) {
-    await db
-      .update(uploadsTable)
-      .set({ status: "failed", errorMessage: "No data rows found in file" })
-      .where(eq(uploadsTable.id, uploadId));
+    await supabase
+      .from("uploads")
+      .update({ status: "failed", error_message: "No data rows found in file" })
+      .eq("id", uploadId);
     return 0;
   }
 
   try {
     if (fileType === "active_tickets") {
-      const mapped = rows.map((r) => mapActiveTicket(r, uploadId));
-      // Clear old records for this upload before inserting
-      await db.delete(activeTicketsTable).where(eq(activeTicketsTable.uploadId, uploadId));
-      for (const ch of chunk(mapped, 500)) {
-        await db.insert(activeTicketsTable).values(ch);
-      }
+      await replaceTableData(
+        "active_tickets",
+        rows.map((r) => keysToSnake(mapActiveTicket(r, uploadId))),
+        uploadId,
+      );
+      await removeClosedTicketsFromActive();
     } else if (fileType === "closed_tickets") {
-      const mapped = rows.map((r) => mapClosedTicket(r, uploadId));
-      await db.delete(closedTicketsTable).where(eq(closedTicketsTable.uploadId, uploadId));
-      for (const ch of chunk(mapped, 500)) {
-        await db.insert(closedTicketsTable).values(ch);
-      }
+      await replaceTableData(
+        "closed_tickets",
+        rows.map((r) => keysToSnake(mapClosedTicket(r, uploadId))),
+        uploadId,
+      );
+      await removeClosedTicketsFromActive();
     } else if (fileType === "mrf_data") {
-      const mapped = rows.map((r) => mapMrfData(r, uploadId));
-      await db.delete(mrfDataTable).where(eq(mrfDataTable.uploadId, uploadId));
-      for (const ch of chunk(mapped, 500)) {
-        await db.insert(mrfDataTable).values(ch);
-      }
+      await replaceTableData(
+        "mrf_data",
+        rows.map((r) => keysToSnake(mapMrfData(r, uploadId))),
+        uploadId,
+      );
+    } else if (fileType === "sales_data") {
+      await replaceTableData(
+        "sales_data",
+        rows.map((r) => keysToSnake(mapSalesData(r, uploadId))),
+        uploadId,
+      );
+    } else {
+      throw new Error(`Unsupported file type: ${fileType}`);
     }
 
-    await db
-      .update(uploadsTable)
-      .set({ status: "completed", recordCount: rows.length })
-      .where(eq(uploadsTable.id, uploadId));
+    await supabase
+      .from("uploads")
+      .update({ status: "completed", record_count: rows.length, error_message: null })
+      .eq("id", uploadId);
 
     return rows.length;
   } catch (err) {
     logger.error({ err, uploadId }, "Error processing upload");
-    await db
-      .update(uploadsTable)
-      .set({ status: "failed", errorMessage: String(err) })
-      .where(eq(uploadsTable.id, uploadId));
+
+    const table: DataTable | null =
+      fileType === "active_tickets" ||
+      fileType === "closed_tickets" ||
+      fileType === "mrf_data" ||
+      fileType === "sales_data"
+        ? fileType
+        : null;
+    if (table) {
+      await supabase.from(table).delete().eq("upload_id", uploadId);
+    }
+
+    await supabase
+      .from("uploads")
+      .update({ status: "failed", error_message: String(err) })
+      .eq("id", uploadId);
     throw err;
   }
 }

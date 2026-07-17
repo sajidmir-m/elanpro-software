@@ -1,50 +1,85 @@
 import { type Request, type Response, type NextFunction } from "express";
-import { db, sessionsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import type { User } from "@workspace/db";
+import {
+  getServiceClient,
+  formatProfile,
+  type ProfileRow,
+} from "@workspace/supabase";
 
 declare global {
   namespace Express {
     interface Request {
-      currentUser?: User;
+      currentUser?: ProfileRow;
     }
   }
 }
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const sessionId = (req.cookies as Record<string, string | undefined>)?.session;
-  if (!sessionId) {
+export { formatProfile as formatUser };
+
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
-  const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+  const token = authHeader.slice(7);
+  const supabase = getServiceClient();
 
-  if (!session || session.expiresAt < new Date()) {
-    res.status(401).json({ error: "Session expired" });
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    res.status(401).json({ error: "Invalid or expired token" });
     return;
   }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
 
-  if (!user || !user.isActive) {
-    res.status(401).json({ error: "User not found or inactive" });
+  if (profileError || !profile) {
+    res.status(401).json({ error: "Profile not found" });
     return;
   }
 
-  req.currentUser = user;
+  if (!profile.is_active) {
+    res.status(401).json({ error: "Account is inactive" });
+    return;
+  }
+
+  req.currentUser = profile as ProfileRow;
   next();
 }
 
-export function formatUser(user: User) {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    isActive: user.isActive,
-    permissions: user.permissions ?? [],
-    managerId: user.managerId ?? null,
-    createdAt: user.createdAt?.toISOString() ?? null,
-  };
+export function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (req.currentUser?.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}
+
+export function requireUploadAccess(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  const role = req.currentUser?.role;
+  if (role !== "admin" && role !== "manager") {
+    res.status(403).json({ error: "Upload access requires admin or manager role" });
+    return;
+  }
+  next();
 }

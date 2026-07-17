@@ -132,6 +132,7 @@ export default function Uploads() {
                   <SelectItem value="active_tickets">Active Tickets (WIP)</SelectItem>
                   <SelectItem value="closed_tickets">Closed Tickets (Resolved)</SelectItem>
                   <SelectItem value="mrf_data">MRF / Spares Data</SelectItem>
+                  <SelectItem value="sales_data">Sales Data (for BD vs Sales)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

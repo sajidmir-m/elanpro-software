@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "seed": "tsx ./src/seed.ts",
     "hello": "tsx ./src/hello.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
     "@types/node": "catalog:",
-    "bcrypt": "^6.0.0",
+    "@workspace/supabase": "workspace:*",
     "tsx": "catalog:"
   }
 }

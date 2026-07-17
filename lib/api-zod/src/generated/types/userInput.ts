@@ -13,6 +13,7 @@ export interface UserInput {
   password: string;
   role: UserInputRole;
   /** @nullable */
-  managerId?: number | null;
+  managerId?: string | null;
+  department?: string | null;
   permissions?: string[];
 }

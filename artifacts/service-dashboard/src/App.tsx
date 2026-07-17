@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DesktopTitleBar } from '@/components/desktop-title-bar';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { AuthProvider, ProtectedRoute } from '@/lib/auth';
@@ -9,6 +10,7 @@ import { AppLayout } from '@/components/layout';
 import Login from '@/pages/login';
 import Dashboard from '@/pages/dashboard';
 import ActiveTickets from '@/pages/active-tickets';
+import CallAge from '@/pages/call-age';
 import ClosedTickets from '@/pages/closed-tickets';
 import ProductFailure from '@/pages/reports/product-failure';
 import ComponentFailure from '@/pages/reports/component-failure';
@@ -36,6 +38,7 @@ function ProtectedRoutes() {
       <Switch>
         <Route path="/" component={() => <ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/active-tickets" component={() => <ProtectedRoute allowedRoles={['admin', 'manager', 'ash', 'rsh', 'service_partner']}><ActiveTickets /></ProtectedRoute>} />
+        <Route path="/call-age" component={() => <ProtectedRoute allowedRoles={['admin', 'manager', 'ash', 'rsh', 'service_partner']}><CallAge /></ProtectedRoute>} />
         <Route path="/closed-tickets" component={() => <ProtectedRoute allowedRoles={['admin', 'manager', 'ash', 'rsh', 'service_partner']}><ClosedTickets /></ProtectedRoute>} />
         
         {/* Reports */}
@@ -71,11 +74,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <AuthProvider>
-            <Router />
-          </AuthProvider>
-        </WouterRouter>
+        <div className="min-h-screen flex flex-col">
+          <DesktopTitleBar />
+          <div className="flex-1 min-h-0">
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <AuthProvider>
+                <Router />
+              </AuthProvider>
+            </WouterRouter>
+          </div>
+        </div>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
