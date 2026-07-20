@@ -6,6 +6,7 @@ import { DataTable } from "@/components/data-table";
 import { ClosureOverview } from "@/components/closure-overview";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { HideableSection } from "@/components/hideable-section";
 import {
   fetchClosureDashboard,
   fetchRecords,
@@ -16,7 +17,9 @@ const CLOSURE_FIELDS: FilterField[] = [
   "search",
   "warranty",
   "dateRangeDays",
-  "region",
+  "customerCategory",
+  "customerName",
+  "closureType",
   "product",
   "category",
   "rsh",
@@ -29,7 +32,6 @@ const FIELD_LABELS: Partial<Record<FilterField, string>> = {
   ash: "Reporting Manager",
   rsh: "RSH",
   category: "Product Category",
-  region: "Region",
 };
 
 export default function ClosedTickets() {
@@ -43,7 +45,6 @@ export default function ClosedTickets() {
     () => ({
       search: filters.search || null,
       warranty: filters.warranty ?? "all",
-      region: filters.region,
       rsh: filters.rsh,
       servicePartner: filters.servicePartner,
       ash: filters.ash,
@@ -51,6 +52,9 @@ export default function ClosedTickets() {
       product: filters.product,
       state: filters.state,
       dateRangeDays: filters.dateRangeDays,
+      customerCategory: filters.customerCategory,
+      customerName: filters.customerName,
+      closureType: filters.closureType,
     }),
     [filters],
   );
@@ -170,41 +174,47 @@ export default function ClosedTickets() {
             <ClosureOverview
               data={dashboard.data}
               onSelectProduct={(product) => updateFilters({ ...filters, product })}
-              onSelectRegion={(region) => updateFilters({ ...filters, region })}
+              onSelectCustomerCategory={(customerCategory) => updateFilters({ ...filters, customerCategory })}
               onSelectPartner={(servicePartner) => updateFilters({ ...filters, servicePartner })}
               onSelectManager={(ash) => updateFilters({ ...filters, ash })}
             />
           )
         )}
 
-        <section className="space-y-2">
-          <div>
-            <h2 className="text-[15px] font-semibold text-[#111827]">Complete Closed Ticket Records</h2>
-            <p className="text-[12px] text-[#667085]">
-              Same operational fields as Active, plus closure, TAT, consumed components and MRF approval.
-            </p>
-          </div>
-          {records.error ? (
-            <div className="rounded-xl border bg-white p-8 text-center text-sm text-destructive">
-              {String((records.error as Error).message)}
+        <HideableSection
+          title="Complete Closed Ticket Records"
+          subtitle="Closed ticket records table is hidden."
+          defaultOpen={false}
+        >
+          <section className="space-y-2">
+            <div>
+              <h2 className="text-[15px] font-semibold text-[#111827]">Complete Closed Ticket Records</h2>
+              <p className="text-[12px] text-[#667085]">
+                Same operational fields as Active, plus closure, TAT, consumed components and MRF approval.
+              </p>
             </div>
-          ) : (
-            <div className="rounded-xl border border-[#E7EAF0] bg-white shadow-sm">
-              <DataTable
-                columns={records.data?.columns ?? []}
-                rows={records.data?.rows ?? []}
-                total={records.data?.total ?? 0}
-                page={records.data?.page ?? page}
-                pageSize={records.data?.pageSize ?? pageSize}
-                isLoading={records.isLoading || (records.isFetching && !records.data)}
-                sortBy={sortBy}
-                sortDir={sortDir}
-                onSort={handleSort}
-                onPageChange={setPage}
-              />
-            </div>
-          )}
-        </section>
+            {records.error ? (
+              <div className="rounded-xl border bg-white p-8 text-center text-sm text-destructive">
+                {String((records.error as Error).message)}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-[#E7EAF0] bg-white shadow-sm">
+                <DataTable
+                  columns={records.data?.columns ?? []}
+                  rows={records.data?.rows ?? []}
+                  total={records.data?.total ?? 0}
+                  page={records.data?.page ?? page}
+                  pageSize={records.data?.pageSize ?? pageSize}
+                  isLoading={records.isLoading || (records.isFetching && !records.data)}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </section>
+        </HideableSection>
       </div>
     </div>
   );

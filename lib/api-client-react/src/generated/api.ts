@@ -21,7 +21,6 @@ import type {
 
 import type {
   ActiveTicketsResult,
-  AuthResult,
   ClosedTicketsResult,
   ComponentFailureItem,
   DashboardSummary,
@@ -37,7 +36,6 @@ import type {
   GetTatAnalysisReportParams,
   GetWarrantyAnalysisReportParams,
   HealthStatus,
-  LoginInput,
   MessageResponse,
   MrfAnalysisResult,
   PermissionsUpdate,
@@ -168,7 +166,7 @@ export const getGetMeUrl = () => {
 }
 
 /**
- * @summary Get current authenticated user
+ * @summary Get current authenticated user profile
  */
 export const getMe = async ( options?: RequestInit): Promise<User> => {
 
@@ -215,7 +213,7 @@ export type GetMeQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Get current authenticated user
+ * @summary Get current authenticated user profile
  */
 
 export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<ErrorResponse>>(

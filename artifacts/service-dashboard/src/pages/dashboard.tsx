@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useGetDashboardSummary, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell } from "recharts";
-import { Clock, CheckCircle2, Ticket, BoxSelect, AlertCircle } from "lucide-react";
+import { Clock, CheckCircle2, Ticket, BoxSelect, AlertCircle, ShieldAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 
@@ -55,7 +55,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Tickets</CardTitle>
@@ -98,18 +98,28 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-1">Material requisition forms</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">MRF Pending NPC Approval</CardTitle>
+            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summary.mrfPendingNpcApproval.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Awaiting NPC sign-off</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 flex flex-col">
           <CardHeader>
-            <CardTitle>Active Tickets by State</CardTitle>
-            <CardDescription>Distribution of ongoing service requests geographically.</CardDescription>
+            <CardTitle>Pending Tickets by Customer Category</CardTitle>
+            <CardDescription>Active/pending tickets grouped by customer category.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-4">
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={summary.byState.slice(0, 10)}>
+                <BarChart data={summary.byCustomerCategory}>
                   <XAxis dataKey="label" fontSize={12} tickLine={false} axisLine={false} className="font-mono" />
                   <YAxis fontSize={12} tickLine={false} axisLine={false} width={40} className="font-mono" />
                   <Tooltip 

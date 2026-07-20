@@ -8,7 +8,6 @@
 
 export * from './activeTicket';
 export * from './activeTicketsResult';
-export * from './authResult';
 export * from './avgTatByLabel';
 export * from './closedTicket';
 export * from './closedTicketsResult';
@@ -29,7 +28,6 @@ export * from './getSalesComplaintReportParams';
 export * from './getTatAnalysisReportParams';
 export * from './getWarrantyAnalysisReportParams';
 export * from './healthStatus';
-export * from './loginInput';
 export * from './messageResponse';
 export * from './mrfAnalysisResult';
 export * from './permissionsUpdate';

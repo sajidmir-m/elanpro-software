@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { FilterBar, type FilterBarState, type FilterField } from "@/components/filter-bar";
 import {
+  EmailReportDialog,
   LiveOpsQuickFilters,
   LiveOpsDataExplorer,
   LiveOpsDrilldownDialog,
@@ -116,6 +117,7 @@ export default function ActiveTickets() {
     view: LiveOpsDrilldownView;
     group?: string;
   } | null>(null);
+  const [emailReportOpen, setEmailReportOpen] = useState(false);
 
   const analyticsQuery = useMemo(() => toAnalyticsQuery(filters), [filters]);
 
@@ -145,6 +147,7 @@ export default function ActiveTickets() {
           onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
           onRefresh={() => refetch()}
           onExport={() => data && downloadPartnersCsv(data)}
+          onEmailReport={() => setEmailReportOpen(true)}
         />
 
         <div className="space-y-2">
@@ -262,6 +265,7 @@ export default function ActiveTickets() {
           if (!open) setDrilldown(null);
         }}
       />
+      <EmailReportDialog open={emailReportOpen} onOpenChange={setEmailReportOpen} filters={analyticsQuery} />
     </div>
   );
 }

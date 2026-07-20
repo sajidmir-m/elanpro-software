@@ -870,13 +870,15 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalActive, totalClosed, totalMrf, avgTatMinutes, pendingByAge, byState, byCategory, recentUploads]
+      required: [totalActive, totalClosed, totalMrf, mrfPendingNpcApproval, avgTatMinutes, pendingByAge, byState, byCategory, byCustomerCategory, recentUploads]
       properties:
         totalActive:
           type: integer
         totalClosed:
           type: integer
         totalMrf:
+          type: integer
+        mrfPendingNpcApproval:
           type: integer
         avgTatMinutes:
           type: ["number", "null"]
@@ -897,6 +899,10 @@ components:
           items:
             $ref: "#/components/schemas/CountByLabel"
         byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+        byCustomerCategory:
           type: array
           items:
             $ref: "#/components/schemas/CountByLabel"

@@ -13,10 +13,12 @@ export interface DashboardSummary {
   totalActive: number;
   totalClosed: number;
   totalMrf: number;
+  mrfPendingNpcApproval: number;
   /** @nullable */
   avgTatMinutes: number | null;
   pendingByAge: DashboardSummaryPendingByAge;
   byState: CountByLabel[];
   byCategory: CountByLabel[];
+  byCustomerCategory: CountByLabel[];
   recentUploads: Upload[];
 }

@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   fetchFilterOptions,
-  parseServicePartners,
-  serializeServicePartners,
+  parseMultiValue,
+  serializeMultiValue,
 } from "@/lib/analytics-api";
 import { HierarchyPartnerPickerDialog } from "@/components/rsh-partner-picker";
+import { MultiSelectPickerDialog } from "@/components/multi-select-picker";
+import { SearchableSelect } from "@/components/searchable-select";
 
 export type FilterBarState = {
   search?: string;
@@ -27,6 +29,9 @@ export type FilterBarState = {
   callAgeRange?: string | null;
   warranty?: "all" | "in" | "out" | null;
   dateRangeDays?: number | null;
+  customerCategory?: string | null;
+  customerName?: string | null;
+  closureType?: string | null;
 };
 
 export type FilterField =
@@ -43,7 +48,10 @@ export type FilterField =
   | "ticketStatus"
   | "callAgeRange"
   | "warranty"
-  | "dateRangeDays";
+  | "dateRangeDays"
+  | "customerCategory"
+  | "customerName"
+  | "closureType";
 
 const ALL_FIELDS: FilterField[] = [
   "search",
@@ -55,6 +63,9 @@ const ALL_FIELDS: FilterField[] = [
   "category",
   "product",
   "state",
+  "customerCategory",
+  "customerName",
+  "closureType",
   "ticketStatus",
   "callAgeRange",
   "warranty",
@@ -111,6 +122,9 @@ const DEFAULT_FIELD_LABELS: Record<FilterField, string> = {
   callAgeRange: "Call Range",
   warranty: "Warranty",
   dateRangeDays: "Date Range",
+  customerCategory: "Customer Category",
+  customerName: "Customer Name",
+  closureType: "Closure Type",
 };
 
 interface FilterBarProps {
@@ -169,6 +183,60 @@ function SearchBox({
   );
 }
 
+function DebouncedTextFilter({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+  placeholder: string;
+}) {
+  const [local, setLocal] = useState(value ?? "");
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    setLocal(value ?? "");
+  }, [value]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const push = (v: string) => {
+    setLocal(v);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => onChange(v.trim() || null), 300);
+  };
+
+  return (
+    <div className="relative w-[170px]">
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <Input
+        value={local}
+        onChange={(e) => push(e.target.value)}
+        placeholder={placeholder}
+        className="h-9 pl-7 pr-7 text-xs"
+      />
+      {local && (
+        <button
+          type="button"
+          onClick={() => push("")}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function allLabel(label: string): string {
+  // Avoid "All Product Categorys" / "All Categorys" — labels already read as nouns.
+  if (/s$/i.test(label) || /y$/i.test(label) || /\b(category|type|range|status|warranty)$/i.test(label)) {
+    return `All ${label}`;
+  }
+  return `All ${label}s`;
+}
+
 function FilterSelect({
   value,
   placeholder,
@@ -181,19 +249,7 @@ function FilterSelect({
   onChange: (v: string | null) => void;
 }) {
   return (
-    <Select value={value || "all"} onValueChange={(v) => onChange(v === "all" ? null : v)}>
-      <SelectTrigger className="h-9 w-[170px] text-xs">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        <SelectItem value="all">{placeholder}</SelectItem>
-        {options.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect value={value} placeholder={placeholder} options={options} onChange={onChange} />
   );
 }
 
@@ -216,12 +272,18 @@ export function FilterBar({
   const [partnerPickerOpen, setPartnerPickerOpen] = useState(false);
   const [pickerScope, setPickerScope] = useState<"rsh" | "ash" | "all">("all");
   const [pickerName, setPickerName] = useState<string | null>(null);
+  const [rshPickerOpen, setRshPickerOpen] = useState(false);
+  const [ashPickerOpen, setAshPickerOpen] = useState(false);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
 
   const set = (patch: Partial<FilterBarState>) => onChange({ ...filters, ...patch });
 
   const show = (f: FilterField) => fields.includes(f);
 
-  const selectedPartners = parseServicePartners(filters.servicePartner);
+  const selectedPartners = parseMultiValue(filters.servicePartner);
+  const selectedRsh = parseMultiValue(filters.rsh);
+  const selectedAsh = parseMultiValue(filters.ash);
+  const selectedProduct = parseMultiValue(filters.product);
 
   const openPartnerPicker = (scope: "rsh" | "ash" | "all", name: string | null) => {
     setPickerScope(scope);
@@ -229,24 +291,41 @@ export function FilterBar({
     setPartnerPickerOpen(true);
   };
 
-  const handleRshChange = (v: string | null) => {
-    if (!v) {
+  /** ASH options valid for the currently-selected RSH(es); union across many. */
+  const ashOptionsForRsh = (rshValues: string[]): string[] => {
+    if (rshValues.length === 0) return options?.ashList ?? [];
+    const set = new Set<string>();
+    for (const rsh of rshValues) {
+      for (const a of options?.ashesByRsh?.[rsh] ?? []) set.add(a);
+    }
+    return set.size > 0 ? [...set] : (options?.ashList ?? []);
+  };
+
+  const applyRshSelection = (values: string[] | null) => {
+    if (!values || values.length === 0) {
       set({ rsh: null, servicePartner: null });
       return;
     }
-    // Set RSH immediately, then open partner picker for that RSH
-    set({ rsh: v, servicePartner: null });
-    openPartnerPicker("rsh", v);
+    // Drop any ASH selections that don't belong to the newly selected RSH(es).
+    const validAshes = new Set(ashOptionsForRsh(values));
+    const remainingAsh = selectedAsh.filter((a) => validAshes.has(a));
+    set({
+      rsh: serializeMultiValue(values),
+      servicePartner: null,
+      ash: serializeMultiValue(remainingAsh),
+    });
   };
 
-  const handleAshChange = (v: string | null) => {
-    if (!v) {
+  const applyAshSelection = (values: string[] | null) => {
+    if (!values || values.length === 0) {
       set({ ash: null, servicePartner: null });
       return;
     }
-    // Set Reporting Manager immediately, then show only their partners.
-    set({ ash: v, servicePartner: null });
-    openPartnerPicker("ash", v);
+    set({ ash: serializeMultiValue(values), servicePartner: null });
+  };
+
+  const applyProductSelection = (values: string[] | null) => {
+    set({ product: values && values.length > 0 ? serializeMultiValue(values) : null });
   };
 
   const activeChips = Object.entries(filters).filter(
@@ -264,8 +343,13 @@ export function FilterBar({
 
   const chipLabel = (key: string, value: unknown) => {
     if (key === "servicePartner") {
-      const list = parseServicePartners(String(value));
+      const list = parseMultiValue(String(value));
       if (list.length > 1) return `${list.length} partners`;
+      return list[0] ?? String(value);
+    }
+    if (key === "rsh" || key === "ash" || key === "product") {
+      const list = parseMultiValue(String(value));
+      if (list.length > 1) return `${list.length} selected`;
       return list[0] ?? String(value);
     }
     return String(value);
@@ -368,12 +452,20 @@ export function FilterBar({
           />
         )}
         {show("rsh") && (
-          <FilterSelect
-            value={filters.rsh}
-            placeholder={`All ${labelFor("rsh")}`}
-            options={options?.rshList ?? []}
-            onChange={handleRshChange}
-          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 max-w-[200px] gap-1.5 truncate text-xs"
+            onClick={() => setRshPickerOpen(true)}
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            {selectedRsh.length === 0
+              ? `All ${labelFor("rsh")}`
+              : selectedRsh.length === 1
+                ? selectedRsh[0]
+                : `${selectedRsh.length} ${labelFor("rsh")} selected`}
+          </Button>
         )}
         {show("servicePartner") && (
           <Button
@@ -398,17 +490,25 @@ export function FilterBar({
           </Button>
         )}
         {show("ash") && (
-          <FilterSelect
-            value={filters.ash}
-            placeholder={`All ${labelFor("ash")}s`}
-            options={options?.ashList ?? []}
-            onChange={handleAshChange}
-          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 max-w-[200px] gap-1.5 truncate text-xs"
+            onClick={() => setAshPickerOpen(true)}
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            {selectedAsh.length === 0
+              ? `All ${labelFor("ash")}s`
+              : selectedAsh.length === 1
+                ? selectedAsh[0]
+                : `${selectedAsh.length} ${labelFor("ash")}s selected`}
+          </Button>
         )}
         {show("componentCategory") && (
           <FilterSelect
             value={filters.componentCategory}
-            placeholder={`All ${labelFor("componentCategory")}s`}
+            placeholder={allLabel(labelFor("componentCategory"))}
             options={options?.componentCategories ?? []}
             onChange={(v) => set({ componentCategory: v })}
           />
@@ -416,23 +516,31 @@ export function FilterBar({
         {show("category") && (
           <FilterSelect
             value={filters.category}
-            placeholder={`All ${labelFor("category")}s`}
+            placeholder={allLabel(labelFor("category"))}
             options={options?.categories ?? []}
             onChange={(v) => set({ category: v })}
           />
         )}
         {show("product") && (
-          <FilterSelect
-            value={filters.product}
-            placeholder={`All ${labelFor("product")}s`}
-            options={options?.products ?? []}
-            onChange={(v) => set({ product: v })}
-          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 max-w-[200px] gap-1.5 truncate text-xs"
+            onClick={() => setProductPickerOpen(true)}
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            {selectedProduct.length === 0
+              ? allLabel(labelFor("product"))
+              : selectedProduct.length === 1
+                ? selectedProduct[0]
+                : `${selectedProduct.length} ${labelFor("product")}s selected`}
+          </Button>
         )}
         {show("region") && (
           <FilterSelect
             value={filters.region}
-            placeholder={`All ${labelFor("region")}s`}
+            placeholder={allLabel(labelFor("region"))}
             options={options?.regions ?? []}
             onChange={(v) => set({ region: v })}
           />
@@ -440,9 +548,32 @@ export function FilterBar({
         {show("state") && (
           <FilterSelect
             value={filters.state}
-            placeholder={`All ${labelFor("state")}s`}
+            placeholder={allLabel(labelFor("state"))}
             options={options?.states ?? []}
             onChange={(v) => set({ state: v })}
+          />
+        )}
+        {show("customerCategory") && (
+          <FilterSelect
+            value={filters.customerCategory}
+            placeholder={allLabel(labelFor("customerCategory"))}
+            options={options?.customerCategories ?? []}
+            onChange={(v) => set({ customerCategory: v })}
+          />
+        )}
+        {show("customerName") && (
+          <DebouncedTextFilter
+            value={filters.customerName}
+            placeholder={labelFor("customerName")}
+            onChange={(v) => set({ customerName: v })}
+          />
+        )}
+        {show("closureType") && (
+          <FilterSelect
+            value={filters.closureType}
+            placeholder={allLabel(labelFor("closureType"))}
+            options={options?.closureTypes ?? []}
+            onChange={(v) => set({ closureType: v })}
           />
         )}
 
@@ -489,9 +620,49 @@ export function FilterBar({
         onOpenChange={setPartnerPickerOpen}
         onApply={(partners) => {
           set({
-            servicePartner: partners ? serializeServicePartners(partners) : null,
+            servicePartner: partners ? serializeMultiValue(partners) : null,
           });
         }}
+      />
+
+      <MultiSelectPickerDialog
+        open={rshPickerOpen}
+        title={`Select ${labelFor("rsh")}`}
+        description={`Browse all ${labelFor("rsh")}s from your uploaded data. Choose one or many, then apply.`}
+        searchPlaceholder={`Search ${labelFor("rsh")}s…`}
+        emptyMessage="No RSH found in uploaded data."
+        options={options?.rshList ?? []}
+        initialSelected={selectedRsh}
+        onOpenChange={setRshPickerOpen}
+        onApply={applyRshSelection}
+      />
+
+      <MultiSelectPickerDialog
+        open={ashPickerOpen}
+        title={`Select ${labelFor("ash")}`}
+        description={
+          selectedRsh.length > 0
+            ? `Browse ${labelFor("ash")}s under the selected ${labelFor("rsh")}(s). Choose one or many, then apply.`
+            : `Browse all ${labelFor("ash")}s from your uploaded data. Choose one or many, then apply.`
+        }
+        searchPlaceholder={`Search ${labelFor("ash")}s…`}
+        emptyMessage="No ASH found in uploaded data."
+        options={ashOptionsForRsh(selectedRsh)}
+        initialSelected={selectedAsh}
+        onOpenChange={setAshPickerOpen}
+        onApply={applyAshSelection}
+      />
+
+      <MultiSelectPickerDialog
+        open={productPickerOpen}
+        title={`Select ${labelFor("product")}`}
+        description={`Browse all ${labelFor("product")}s from your uploaded data. Choose one or many, then apply.`}
+        searchPlaceholder={`Search ${labelFor("product")}s…`}
+        emptyMessage="No products found in uploaded data."
+        options={options?.products ?? []}
+        initialSelected={selectedProduct}
+        onOpenChange={setProductPickerOpen}
+        onApply={applyProductSelection}
       />
     </div>
   );

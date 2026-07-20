@@ -3,24 +3,32 @@ import { requireAuth } from "../lib/auth";
 import type { FilterParams } from "../lib/filters";
 import {
   average,
-  countRows,
+  fetchMrfRows,
   fetchRecentUploads,
   fetchTicketRows,
   groupCount,
-  ticketAgeDays,
+  attachTicketAges,
+  rowAgeDays,
 } from "../lib/ticket-query";
+
+function isPendingNpcApproval(row: Record<string, unknown>): boolean {
+  const value = String(row.npc_approval ?? "").trim().toLowerCase();
+  return value === "" || value === "pending";
+}
 
 const router: IRouter = Router();
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   try {
     const params = req.query as FilterParams;
-    const [activeRows, closedRows, totalMrf, recentUploads] = await Promise.all([
+    const [activeRows, closedRows, mrfRows, recentUploads] = await Promise.all([
       fetchTicketRows("active_tickets", params),
       fetchTicketRows("closed_tickets", params),
-      countRows("mrf_data"),
+      fetchMrfRows(params),
       fetchRecentUploads(5),
     ]);
+
+    attachTicketAges(activeRows);
 
     const pendingByAge = {
       within7Days: 0,
@@ -30,7 +38,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     };
 
     for (const row of activeRows) {
-      const age = ticketAgeDays(row.created_on as string | undefined);
+      const age = rowAgeDays(row);
       if (age <= 7) pendingByAge.within7Days += 1;
       else if (age <= 15) pendingByAge.within15Days += 1;
       else if (age <= 30) pendingByAge.within30Days += 1;
@@ -40,15 +48,17 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     res.json({
       totalActive: activeRows.length,
       totalClosed: closedRows.length,
-      totalMrf,
+      totalMrf: mrfRows.length,
+      mrfPendingNpcApproval: mrfRows.filter(isPendingNpcApproval).length,
       avgTatMinutes: average(
         closedRows.map((row) =>
           row.tat_minutes != null ? Number(row.tat_minutes) : null,
         ),
       ),
       pendingByAge,
-      byState: groupCount(activeRows, "state"),
+      byState: groupCount(activeRows, "state", "Unknown", 100),
       byCategory: groupCount(activeRows, "category", "Unknown", 10),
+      byCustomerCategory: groupCount(activeRows, "customer_category", "Unknown", 50),
       recentUploads: recentUploads.map((upload) => ({
         id: upload.id,
         filename: upload.filename,
@@ -90,7 +100,7 @@ router.get("/dashboard/active-tickets", requireAuth, async (req, res): Promise<v
         ticketType: row.ticket_type,
         supportType: row.support_type,
         customerName: row.customer_name,
-        ageDays: ticketAgeDays(row.created_on as string | undefined),
+        ageDays: rowAgeDays(row),
       })),
       total: rows.length,
       byProduct: groupCount(rows, "product"),
@@ -157,7 +167,7 @@ function buildAgeBuckets(rows: Record<string, unknown>[]) {
   ]);
 
   for (const row of rows) {
-    const age = ticketAgeDays(row.created_on as string | undefined);
+    const age = rowAgeDays(row);
     if (age <= 7) buckets.set("0-7 days", (buckets.get("0-7 days") ?? 0) + 1);
     else if (age <= 15) buckets.set("8-15 days", (buckets.get("8-15 days") ?? 0) + 1);
     else if (age <= 30) buckets.set("16-30 days", (buckets.get("16-30 days") ?? 0) + 1);

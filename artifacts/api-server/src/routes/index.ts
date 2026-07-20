@@ -8,6 +8,7 @@ import reportsRouter from "./reports";
 import schedulesRouter from "./schedules";
 import filtersRouter from "./filters";
 import analyticsRouter from "./analytics";
+import emailReportsRouter from "./email-reports";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(reportsRouter);
 router.use(schedulesRouter);
 router.use(filtersRouter);
 router.use(analyticsRouter);
+router.use(emailReportsRouter);
 
 export default router;

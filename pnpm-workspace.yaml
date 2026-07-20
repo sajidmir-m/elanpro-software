@@ -5,10 +5,10 @@ packages:
   - scripts
 
 allowBuilds:
-  electron: set this to true or false
-  esbuild: set this to true or false
-  sharp: set this to true or false
-  workerd: set this to true or false
+  electron: true
+  esbuild: true
+  sharp: true
+  workerd: true
 
 autoInstallPeers: false
 

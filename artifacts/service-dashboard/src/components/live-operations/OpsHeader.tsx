@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from "lucide-react";
+import { Download, Mail, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ export function OpsHeader({
   onToggleAutoRefresh,
   onRefresh,
   onExport,
+  onEmailReport,
 }: {
   refreshedAt?: string;
   autoRefresh: boolean;
@@ -17,6 +18,7 @@ export function OpsHeader({
   onToggleAutoRefresh: () => void;
   onRefresh: () => void;
   onExport: () => void;
+  onEmailReport?: () => void;
 }) {
   const lastRefresh = refreshedAt ? format(new Date(refreshedAt), "HH:mm:ss") : "—";
 
@@ -44,6 +46,12 @@ export function OpsHeader({
             <Download className="h-3.5 w-3.5" />
             Export
           </Button>
+          {onEmailReport && (
+            <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onEmailReport}>
+              <Mail className="h-3.5 w-3.5" />
+              Email Report
+            </Button>
+          )}
           <Button
             size="sm"
             className="h-9 gap-1.5 bg-[#2563EB] hover:bg-[#2563EB]/90"

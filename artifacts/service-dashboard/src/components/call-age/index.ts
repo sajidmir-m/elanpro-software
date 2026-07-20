@@ -6,6 +6,8 @@ export * from "./ExecutiveSummaryCard";
 export * from "./AgeDistributionCard";
 export * from "./RiskRegionsTable";
 export * from "./RshWorkloadTable";
+export * from "./AshWorkloadTable";
+export * from "./TopServicePartnersAtRiskTable";
 export * from "./CriticalTicketsTable";
 export * from "./ActionCards";
 export * from "./TrendPanel";

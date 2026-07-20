@@ -15,6 +15,7 @@ export type ReportingHierarchyDirectory = {
   ashList: string[];
   rshList: string[];
   byAshName: Map<string, ReportingHierarchyRow>;
+  ashesByRsh: Record<string, string[]>;
 };
 
 function normalizedName(value: unknown): string {
@@ -36,8 +37,16 @@ export async function fetchReportingHierarchyDirectory(): Promise<ReportingHiera
 
   const rows = (data ?? []) as ReportingHierarchyRow[];
   const byAshName = new Map<string, ReportingHierarchyRow>();
+  const ashesByRshSet = new Map<string, Set<string>>();
   for (const row of rows) {
     byAshName.set(normalizedName(row.ash_name), row);
+    if (!ashesByRshSet.has(row.rsh_name)) ashesByRshSet.set(row.rsh_name, new Set());
+    ashesByRshSet.get(row.rsh_name)!.add(row.ash_name);
+  }
+
+  const ashesByRsh: Record<string, string[]> = {};
+  for (const [rsh, ashes] of ashesByRshSet.entries()) {
+    ashesByRsh[rsh] = [...ashes].sort((a, b) => a.localeCompare(b));
   }
 
   return {
@@ -45,6 +54,7 @@ export async function fetchReportingHierarchyDirectory(): Promise<ReportingHiera
     ashList: [...new Set(rows.map((row) => row.ash_name))].sort((a, b) => a.localeCompare(b)),
     rshList: [...new Set(rows.map((row) => row.rsh_name))].sort((a, b) => a.localeCompare(b)),
     byAshName,
+    ashesByRsh,
   };
 }
 
@@ -60,11 +70,16 @@ export function applySavedReportingHierarchy(
   const uploadedReportingManager = String(row.rsh ?? "").trim();
   const hierarchy = directory.byAshName.get(normalizedName(uploadedReportingManager));
 
+  // Fall back to the raw uploaded name (instead of a generic "Unmapped"
+  // bucket) so tickets whose Reporting Manager isn't yet registered in the
+  // admin directory still show up under their real name everywhere
+  // (lists, filters, click-through drilldowns) instead of disappearing
+  // into a shared placeholder that can't be filtered to consistently.
   return {
     ...row,
     uploaded_reporting_manager: uploadedReportingManager || null,
     representative: row.ash ?? null,
-    ash: hierarchy?.ash_name ?? "Unmapped",
+    ash: hierarchy?.ash_name ?? (uploadedReportingManager || "Unmapped"),
     rsh: hierarchy?.rsh_name ?? "Unassigned",
     hierarchy_region: hierarchy?.region_code ?? null,
   };

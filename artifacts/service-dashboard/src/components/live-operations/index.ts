@@ -16,3 +16,4 @@ export * from "./ActivityStrip";
 export * from "./ActionCenter";
 export * from "./SmartInsights";
 export * from "./LiveOpsQuickFilters";
+export * from "./EmailReportDialog";

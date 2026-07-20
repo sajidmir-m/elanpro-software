@@ -17,46 +17,17 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary Login with email and password
- */
-export const LoginBody = zod.object({
-  "email": zod.string(),
-  "password": zod.string()
-})
-
-export const LoginResponse = zod.object({
-  "user": zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
-  "isActive": zod.boolean(),
-  "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
-  "createdAt": zod.string().optional()
-})
-})
-
-
-/**
- * @summary Logout current user
- */
-export const LogoutResponse = zod.object({
-  "message": zod.string()
-})
-
-
-/**
- * @summary Get current authenticated user
+ * @summary Get current authenticated user profile
  */
 export const GetMeResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -65,13 +36,14 @@ export const GetMeResponse = zod.object({
  * @summary List all users
  */
 export const ListUsersResponseItem = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -84,19 +56,21 @@ export const CreateUserBody = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "password": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
-  "managerId": zod.number().nullish(),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "permissions": zod.array(zod.string()).optional()
 })
 
 export const CreateUserResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -105,17 +79,18 @@ export const CreateUserResponse = zod.object({
  * @summary Get a user by ID
  */
 export const GetUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.string().uuid()
 })
 
 export const GetUserResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -124,26 +99,28 @@ export const GetUserResponse = zod.object({
  * @summary Update a user
  */
 export const UpdateUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.string().uuid()
 })
 
 export const UpdateUserBody = zod.object({
   "name": zod.string().optional(),
   "email": zod.string().optional(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']).optional(),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']).optional(),
   "isActive": zod.boolean().optional(),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "permissions": zod.array(zod.string()).optional()
 })
 
 export const UpdateUserResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -152,7 +129,7 @@ export const UpdateUserResponse = zod.object({
  * @summary Delete a user
  */
 export const DeleteUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.string().uuid()
 })
 
 export const DeleteUserResponse = zod.object({
@@ -164,7 +141,7 @@ export const DeleteUserResponse = zod.object({
  * @summary Update which dashboard sections a user can access
  */
 export const UpdateUserPermissionsParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.string().uuid()
 })
 
 export const UpdateUserPermissionsBody = zod.object({
@@ -172,13 +149,14 @@ export const UpdateUserPermissionsBody = zod.object({
 })
 
 export const UpdateUserPermissionsResponse = zod.object({
-  "id": zod.number(),
+  "id": zod.string().uuid(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'manager', 'ash', 'rsh', 'service_partner']),
+  "role": zod.enum(['admin', 'manager', 'employee', 'ash', 'rsh', 'service_partner']),
   "isActive": zod.boolean(),
   "permissions": zod.array(zod.string()),
-  "managerId": zod.number().nullish(),
+  "managerId": zod.string().uuid().nullish(),
+  "department": zod.string().nullish(),
   "createdAt": zod.string().optional()
 })
 
@@ -189,7 +167,7 @@ export const UpdateUserPermissionsResponse = zod.object({
 export const ListUploadsResponseItem = zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),
@@ -202,14 +180,14 @@ export const ListUploadsResponse = zod.array(ListUploadsResponseItem)
  * @summary Upload Excel data file (active tickets, closed tickets, or MRF)
  */
 export const UploadDataBody = zod.object({
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
   "file": zod.instanceof(File).optional()
 })
 
 export const UploadDataResponse = zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),
@@ -247,6 +225,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "totalActive": zod.number(),
   "totalClosed": zod.number(),
   "totalMrf": zod.number(),
+  "mrfPendingNpcApproval": zod.number(),
   "avgTatMinutes": zod.number().nullable(),
   "pendingByAge": zod.object({
   "within7Days": zod.number(),
@@ -262,10 +241,14 @@ export const GetDashboardSummaryResponse = zod.object({
   "label": zod.string(),
   "count": zod.number()
 })),
+  "byCustomerCategory": zod.array(zod.object({
+  "label": zod.string(),
+  "count": zod.number()
+})),
   "recentUploads": zod.array(zod.object({
   "id": zod.number(),
   "filename": zod.string(),
-  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data', 'sales_data']),
+  "fileType": zod.enum(['active_tickets', 'closed_tickets', 'mrf_data']),
   "recordCount": zod.number(),
   "uploadedAt": zod.string(),
   "status": zod.enum(['processing', 'completed', 'failed']),

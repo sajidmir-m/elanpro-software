@@ -25,22 +25,26 @@ import {
   type LiveOpsDrilldownRow,
   type LiveOpsDrilldownView,
 } from "@/lib/analytics-api";
-import { formatTicketDate } from "@/lib/utils";
 
 function exportRows(title: string, rows: LiveOpsDrilldownRow[]) {
   const columns: Array<[keyof LiveOpsDrilldownRow, string]> = [
-    ["group", "Selected Dimension"],
-    ["ticketId", "Ticket ID"],
-    ["createdOn", "Created On"],
-    ["ageDays", "Age Days"],
+    ["ticketId", "Ticket Number"],
     ["customer", "Customer Name"],
-    ["customerCategory", "Customer Category"],
+    ["address", "Address"],
     ["city", "City"],
+    ["product", "Product"],
+    ["lastAction", "Last Update"],
+    ["components", "Part Name"],
+    ["ageDays", "Age"],
+    ["reOpenTicket", "Reopen"],
+    ["repeatTicket", "Repeat"],
+    ["group", "Selected Dimension"],
+    ["createdOn", "Created On"],
+    ["customerCategory", "Customer Category"],
     ["state", "State"],
     ["servicePartner", "Service Partner"],
     ["reportingManager", "Reporting Manager"],
     ["rsh", "RSH"],
-    ["product", "Product"],
     ["productCategory", "Product Category"],
     ["warranty", "Warranty / Support"],
     ["ticketType", "Ticket Type"],
@@ -48,8 +52,6 @@ function exportRows(title: string, rows: LiveOpsDrilldownRow[]) {
     ["priority", "Priority"],
     ["ticketStatus", "Ticket Status"],
     ["wipSubStage", "WIP Sub Stage"],
-    ["lastAction", "Last Action"],
-    ["components", "Components"],
     ["mrfApproval", "MRF Approval"],
     ["mrfStatus", "MRF Status"],
     ["mrfComponents", "MRF Components"],
@@ -222,70 +224,51 @@ export function LiveOpsDrilldownDialog({
               {visibleRows.length === 0 ? (
                 <p className="p-10 text-center text-sm text-muted-foreground">No calls match this selection.</p>
               ) : (
-                <Table>
-                  <TableHeader className="sticky top-9 z-10 bg-white">
-                    <TableRow>
-                      <TableHead>Ticket ID</TableHead>
-                      <TableHead>Age</TableHead>
-                      <TableHead className="min-w-[180px]">Selected Value</TableHead>
-                      <TableHead>Status / Priority</TableHead>
-                      <TableHead className="min-w-[250px]">WIP Stage / Last Action</TableHead>
-                      <TableHead className="min-w-[240px]">Ticket Type / Problem</TableHead>
-                      <TableHead>Product / Warranty</TableHead>
-                      <TableHead>MRF Approval</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Partner / Manager / RSH</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleRows.map((row, index) => (
-                      <TableRow key={`${row.ticketId}-${index}`} className="align-top">
-                        <TableCell className="font-semibold">{row.ticketId}</TableCell>
-                        <TableCell className={row.ageDays > 5 ? "font-semibold text-red-600" : ""}>
-                          {row.ageDays}d
-                        </TableCell>
-                        <TableCell className="whitespace-normal text-xs font-medium">{row.group}</TableCell>
-                        <TableCell className="text-xs">
-                          <p className="font-medium">{row.ticketStatus}</p>
-                          <p className="text-muted-foreground">{row.priority}</p>
-                        </TableCell>
-                        <TableCell className="max-w-[360px] whitespace-normal text-xs">
-                          <p>{row.wipSubStage}</p>
-                          <p className="mt-1 text-muted-foreground">Last: {row.lastAction}</p>
-                        </TableCell>
-                        <TableCell className="max-w-[340px] whitespace-normal text-xs">
-                          <p className="font-medium">{row.ticketType}</p>
-                          <p className="mt-1 text-muted-foreground">{row.problemDescription}</p>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <p className="font-medium">{row.product}</p>
-                          <p className="text-muted-foreground">{row.warranty}</p>
-                        </TableCell>
-                        <TableCell className="min-w-[180px] text-xs">
-                          <p className="font-medium">{row.mrfApproval}</p>
-                          <p className="text-muted-foreground">{row.mrfStatus}</p>
-                          {row.mrfComponents !== "—" && (
-                            <p className="mt-1 text-muted-foreground">{row.mrfComponents}</p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <p className="font-medium">{row.customer}</p>
-                          <p className="text-muted-foreground">{row.customerCategory}</p>
-                          <p className="text-muted-foreground">{row.city}, {row.state}</p>
-                        </TableCell>
-                        <TableCell className="min-w-[180px] text-xs">
-                          <p className="font-medium">{row.servicePartner}</p>
-                          <p className="text-muted-foreground">{row.reportingManager}</p>
-                          <p className="text-muted-foreground">RSH: {row.rsh}</p>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {row.createdOn ? formatTicketDate(String(row.createdOn)) : "—"}
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="sticky top-9 z-10 bg-white">
+                      <TableRow>
+                        <TableHead className="whitespace-nowrap">Ticket Number</TableHead>
+                        <TableHead className="min-w-[160px]">Customer Name</TableHead>
+                        <TableHead className="min-w-[140px]">Address</TableHead>
+                        <TableHead>City</TableHead>
+                        <TableHead className="min-w-[120px]">Product</TableHead>
+                        <TableHead className="min-w-[200px]">Last Update</TableHead>
+                        <TableHead className="min-w-[140px]">Part Name</TableHead>
+                        <TableHead>Age</TableHead>
+                        <TableHead className="whitespace-nowrap">Reopen &amp; Repeat</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleRows.map((row, index) => (
+                        <TableRow key={`${row.ticketId}-${index}`} className="align-top">
+                          <TableCell className="whitespace-nowrap font-semibold">{row.ticketId}</TableCell>
+                          <TableCell className="text-xs">
+                            <p className="font-medium">{row.customer}</p>
+                            <p className="text-muted-foreground">{row.customerCategory}</p>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] whitespace-normal text-xs">{row.address}</TableCell>
+                          <TableCell className="text-xs">{row.city}</TableCell>
+                          <TableCell className="text-xs">{row.product}</TableCell>
+                          <TableCell className="max-w-[280px] whitespace-normal text-xs">
+                            <p>{row.lastAction}</p>
+                            {row.wipSubStage && row.wipSubStage !== "—" ? (
+                              <p className="mt-1 text-muted-foreground">WIP: {row.wipSubStage}</p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="max-w-[180px] whitespace-normal text-xs">{row.components}</TableCell>
+                          <TableCell className={row.ageDays > 5 ? "font-semibold text-red-600" : ""}>
+                            {row.ageDays}d
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            <p>Reopen: {row.reOpenTicket}</p>
+                            <p className="text-muted-foreground">Repeat: {row.repeatTicket}</p>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </section>
           </div>

@@ -1,6 +1,6 @@
 import { getServiceClient } from "@workspace/supabase";
 import { matchesServicePartner, normalizeFilterParams, type FilterParams } from "./filters";
-import { ticketAgeDays } from "./ticket-query";
+import { attachTicketAges, rowAgeDays, formatDataAsOf, dataAsOfFromRows } from "./ticket-query";
 import {
   applySavedReportingHierarchy,
   fetchReportingHierarchyDirectory,
@@ -42,6 +42,9 @@ export type AnalyticsParams = FilterParams & {
   ticketId?: string | null;
   area?: string | null;
   nationalHead?: string | null;
+  customerCategory?: string | null;
+  customerName?: string | null;
+  closureType?: string | null;
 };
 
 export function classifyWarranty(supportType: unknown): "in" | "out" | "other" {
@@ -111,16 +114,16 @@ function matchesAnalyticsFilters(row: Record<string, unknown>, params: Analytics
   if (params.category && String(row.category ?? "").toLowerCase() !== params.category.toLowerCase()) {
     return false;
   }
-  if (params.product && String(row.product ?? "").toLowerCase() !== params.product.toLowerCase()) {
+  if (params.product && !matchesServicePartner(row.product, params.product)) {
     return false;
   }
   if (params.servicePartner && !matchesServicePartner(row.service_partner_name, params.servicePartner)) {
     return false;
   }
-  if (params.ash && String(row.ash ?? "").toLowerCase() !== params.ash.toLowerCase()) {
+  if (params.ash && !matchesServicePartner(row.ash, params.ash)) {
     return false;
   }
-  if (params.rsh && String(row.rsh ?? "").toLowerCase() !== params.rsh.toLowerCase()) {
+  if (params.rsh && !matchesServicePartner(row.rsh, params.rsh)) {
     return false;
   }
   if (
@@ -152,6 +155,23 @@ function matchesAnalyticsFilters(row: Record<string, unknown>, params: Analytics
     return false;
   }
   if (params.ticketId && String(row.ticket_id ?? "") !== params.ticketId) return false;
+
+  if (
+    params.customerCategory &&
+    String(row.customer_category ?? "").toLowerCase() !== params.customerCategory.toLowerCase()
+  ) {
+    return false;
+  }
+  if (params.customerName) {
+    const needle = params.customerName.toLowerCase();
+    if (!String(row.customer_name ?? "").toLowerCase().includes(needle)) return false;
+  }
+  if (
+    params.closureType &&
+    String(row.closure_type ?? "").toLowerCase() !== params.closureType.toLowerCase()
+  ) {
+    return false;
+  }
 
   if (params.search) {
     const needle = String(params.search).trim().toLowerCase();
@@ -287,9 +307,11 @@ async function attachMrfApproval(
 }
 
 export async function fetchActive(params: AnalyticsParams = {}) {
-  return (await attachMrfApproval(await fetchAll("active_tickets"))).filter((r) =>
-    matchesAnalyticsFilters(r, params),
-  );
+  const all = await attachMrfApproval(await fetchAll("active_tickets"));
+  // Age against the full extract (max Created On), then filter — so Green/Orange/Red
+  // stay stable when RSH/ASH/product filters are applied.
+  attachTicketAges(all);
+  return all.filter((r) => matchesAnalyticsFilters(r, params));
 }
 
 export async function fetchClosed(params: AnalyticsParams = {}) {
@@ -413,7 +435,7 @@ export function ageUrgency(days: number): AgeUrgency {
 export function ageBreakdown(rows: Record<string, unknown>[]) {
   const counts = { green: 0, orange: 0, red: 0 };
   for (const row of rows) {
-    counts[ageUrgency(ticketAgeDays(row.created_on as string))] += 1;
+    counts[ageUrgency(rowAgeDays(row))] += 1;
   }
   return [
     { label: "≤3 days", count: counts.green, color: "hsl(142 71% 45%)" },
@@ -426,7 +448,7 @@ export function groupAgeByRegion(rows: Record<string, unknown>[], limit = 20) {
   const map = new Map<string, { label: string; green: number; orange: number; red: number; total: number }>();
   for (const row of rows) {
     const label = resolveRegion(row);
-    const urgency = ageUrgency(ticketAgeDays(row.created_on as string));
+    const urgency = ageUrgency(rowAgeDays(row));
     const current = map.get(label) ?? { label, green: 0, orange: 0, red: 0, total: 0 };
     current[urgency] += 1;
     current.total += 1;
@@ -444,7 +466,7 @@ export function groupAgeByField(
   const map = new Map<string, { label: string; green: number; orange: number; red: number; total: number }>();
   for (const row of rows) {
     const label = String(row[field] ?? fallback).trim() || fallback;
-    const urgency = ageUrgency(ticketAgeDays(row.created_on as string));
+    const urgency = ageUrgency(rowAgeDays(row));
     const current = map.get(label) ?? { label, green: 0, orange: 0, red: 0, total: 0 };
     current[urgency] += 1;
     current.total += 1;
@@ -454,6 +476,7 @@ export function groupAgeByField(
 }
 
 export function summarizeActiveByAge(rows: Record<string, unknown>[]) {
+  dataAsOfFromRows(rows);
   type SummaryRow = {
     region: string;
     rsh: string;
@@ -473,7 +496,7 @@ export function summarizeActiveByAge(rows: Record<string, unknown>[]) {
     const region = resolveRegion(row);
     const rsh = String(row.rsh ?? "Unassigned").trim() || "Unassigned";
     const reporting_manager = String(row.ash ?? "Unassigned").trim() || "Unassigned";
-    const age = ticketAgeDays(row.created_on as string);
+    const age = rowAgeDays(row);
     const urgency = ageUrgency(age);
     const key = [region, rsh, reporting_manager].join("|||");
 
@@ -593,7 +616,7 @@ export function nextHierarchyLevel(level?: string | null): HierarchyLevel | null
 
 export function matchesCallAgeRange(row: Record<string, unknown>, range?: string | null): boolean {
   if (!range || range === "all") return true;
-  const age = ticketAgeDays(row.created_on as string);
+  const age = rowAgeDays(row);
   const urgency = ageUrgency(age);
   if (range === "green") return urgency === "green";
   if (range === "orange") return urgency === "orange";
@@ -699,16 +722,21 @@ function bucketMonthly(rows: Record<string, unknown>[], months: number): Array<{
   return [...buckets.entries()].map(([label, count]) => ({ label, count }));
 }
 
-function sparklineForUrgency(rows: Record<string, unknown>[], urgency: AgeUrgency, days = 7): number[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function sparklineForUrgency(
+  rows: Record<string, unknown>[],
+  urgency: AgeUrgency,
+  asOf: Date,
+  days = 7,
+): number[] {
+  const end = new Date(asOf);
+  end.setHours(0, 0, 0, 0);
   const counts = Array(days).fill(0);
 
   for (const row of rows) {
-    if (ageUrgency(ticketAgeDays(row.created_on as string)) !== urgency) continue;
+    if (ageUrgency(rowAgeDays(row)) !== urgency) continue;
     const created = parseDate(row.created_on);
     if (!created) continue;
-    const diff = Math.floor((today.getTime() - created.getTime()) / 86_400_000);
+    const diff = Math.floor((end.getTime() - created.getTime()) / 86_400_000);
     if (diff >= 0 && diff < days) counts[days - 1 - diff] += 1;
   }
 
@@ -721,11 +749,12 @@ function trendPct(current: number, previous: number): number | null {
 }
 
 export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
-  const ages = rows.map((r) => ticketAgeDays(r.created_on as string));
+  const dataAsOf = dataAsOfFromRows(rows);
+  const ages = rows.map((r) => rowAgeDays(r));
   const total = rows.length;
-  const green = rows.filter((r) => ageUrgency(ticketAgeDays(r.created_on as string)) === "green").length;
-  const orange = rows.filter((r) => ageUrgency(ticketAgeDays(r.created_on as string)) === "orange").length;
-  const red = rows.filter((r) => ageUrgency(ticketAgeDays(r.created_on as string)) === "red").length;
+  const green = rows.filter((r) => ageUrgency(rowAgeDays(r)) === "green").length;
+  const orange = rows.filter((r) => ageUrgency(rowAgeDays(r)) === "orange").length;
+  const red = rows.filter((r) => ageUrgency(rowAgeDays(r)) === "red").length;
   const oldest = ages.length ? Math.max(...ages) : 0;
   const avgAge = ages.length ? Math.round(ages.reduce((s, a) => s + a, 0) / ages.length) : 0;
   const medianAge = Math.round(median(ages));
@@ -755,14 +784,32 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
     string,
     { rsh: string; green: number; orange: number; red: number; total: number; ageSum: number; maxAge: number }
   >();
+  const ashMap = new Map<
+    string,
+    { ash: string; green: number; orange: number; red: number; total: number; ageSum: number; maxAge: number }
+  >();
+  const partnerMap = new Map<
+    string,
+    {
+      servicePartner: string;
+      green: number;
+      orange: number;
+      red: number;
+      total: number;
+      ageSum: number;
+      maxAge: number;
+      rshSet: Set<string>;
+    }
+  >();
   const productMap = new Map<string, number>();
 
   for (const row of rows) {
     const region = resolveRegion(row);
     const rsh = String(row.rsh ?? "Unassigned").trim() || "Unassigned";
     const manager = String(row.ash ?? "Unassigned").trim() || "Unassigned";
+    const servicePartner = String(row.service_partner_name ?? "Unassigned").trim() || "Unassigned";
     const product = String(row.product ?? "Unknown").trim() || "Unknown";
-    const age = ticketAgeDays(row.created_on as string);
+    const age = rowAgeDays(row);
     const urgency = ageUrgency(age);
 
     productMap.set(product, (productMap.get(product) ?? 0) + 1);
@@ -790,6 +837,30 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
     h.ageSum += age;
     h.maxAge = Math.max(h.maxAge, age);
     rshMap.set(rsh, h);
+
+    const a = ashMap.get(manager) ?? { ash: manager, green: 0, orange: 0, red: 0, total: 0, ageSum: 0, maxAge: 0 };
+    a[urgency] += 1;
+    a.total += 1;
+    a.ageSum += age;
+    a.maxAge = Math.max(a.maxAge, age);
+    ashMap.set(manager, a);
+
+    const p = partnerMap.get(servicePartner) ?? {
+      servicePartner,
+      green: 0,
+      orange: 0,
+      red: 0,
+      total: 0,
+      ageSum: 0,
+      maxAge: 0,
+      rshSet: new Set<string>(),
+    };
+    p[urgency] += 1;
+    p.total += 1;
+    p.ageSum += age;
+    p.maxAge = Math.max(p.maxAge, age);
+    if (rsh !== "Unassigned") p.rshSet.add(rsh);
+    partnerMap.set(servicePartner, p);
   }
 
   const topRiskRegions = [...regionMap.values()]
@@ -823,9 +894,37 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
     }))
     .sort((a, b) => b.urgentCalls - a.urgentCalls || a.performanceScore - b.performanceScore);
 
+  const topAshWorkload = [...ashMap.values()]
+    .map((a) => ({
+      ash: a.ash,
+      totalCalls: a.total,
+      urgentCalls: a.red,
+      avgAge: a.total > 0 ? Math.round(a.ageSum / a.total) : 0,
+      oldestTicket: a.maxAge,
+      performanceScore: performanceScore(a.red, a.total),
+      withinFiveDaysPct: performanceScore(a.red, a.total),
+      badge: performanceBadge(a.red, a.total),
+    }))
+    .sort((a, b) => b.urgentCalls - a.urgentCalls || a.performanceScore - b.performanceScore);
+
+  const topServicePartnersAtRisk = [...partnerMap.values()]
+    .map((p) => ({
+      servicePartner: p.servicePartner,
+      rshList: [...p.rshSet].sort((a, b) => a.localeCompare(b)),
+      green: p.green,
+      orange: p.orange,
+      red: p.red,
+      total: p.total,
+      avgAge: p.total > 0 ? Math.round(p.ageSum / p.total) : 0,
+      oldestTicket: p.maxAge,
+      overduePct: p.total > 0 ? Math.round((p.red / p.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.red - a.red || b.overduePct - a.overduePct)
+    .map((row, i) => ({ rank: i + 1, ...row }));
+
   const criticalTickets = [...rows]
     .map((row) => {
-      const age = ticketAgeDays(row.created_on as string);
+      const age = rowAgeDays(row);
       const level = ageUrgency(age);
       let priority = "5-30 Days";
       if (age > 60) priority = ">60 Days";
@@ -847,7 +946,7 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
 
   const topRegion = topRiskRegions[0];
   const topRsh = topRshWorkload[0];
-  const overdue30 = rows.filter((r) => ticketAgeDays(r.created_on as string) >= 30).length;
+  const overdue30 = rows.filter((r) => rowAgeDays(r) >= 30).length;
 
   const executiveSummary = [
     `There are ${total.toLocaleString()} open calls.`,
@@ -906,6 +1005,8 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
 
   return {
     totalTickets: total,
+    /** Snapshot end date used for age buckets (max Created On in the upload). */
+    dataAsOf: formatDataAsOf(dataAsOf),
     ageMix: ageBreakdown(rows),
     kpis: {
       total: {
@@ -918,19 +1019,19 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
         value: green,
         pct: pct(green),
         trendPct: null,
-        sparkline: sparklineForUrgency(rows, "green"),
+        sparkline: sparklineForUrgency(rows, "green", dataAsOf),
       },
       orange: {
         value: orange,
         pct: pct(orange),
         trendPct: null,
-        sparkline: sparklineForUrgency(rows, "orange"),
+        sparkline: sparklineForUrgency(rows, "orange", dataAsOf),
       },
       red: {
         value: red,
         pct: pct(red),
         trendPct: null,
-        sparkline: sparklineForUrgency(rows, "red"),
+        sparkline: sparklineForUrgency(rows, "red", dataAsOf),
       },
     },
     stats: {
@@ -943,14 +1044,16 @@ export function summarizeCallAgeDashboard(rows: Record<string, unknown>[]) {
     executiveSummary,
     topRiskRegions,
     topRshWorkload,
+    topAshWorkload,
+    topServicePartnersAtRisk,
     criticalTickets,
     recommendedActions,
     byProduct: [...productMap.entries()]
       .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10),
+      .sort((a, b) => b.count - a.count),
     byRegionAge: groupAgeByRegion(rows, 20),
-    byRshAge: groupAgeByField(rows, "rsh", "Unassigned", 15),
+    byRshAge: groupAgeByField(rows, "rsh", "Unassigned", 9999),
+    byAshAge: groupAgeByField(rows, "ash", "Unassigned", 9999),
     trends: {
       daily: dailyTrend,
       weekly: weeklyTrend,
@@ -996,7 +1099,76 @@ function closureBreakdown(
     .slice(0, limit);
 }
 
-export function summarizeClosureDashboard(rows: Record<string, unknown>[]) {
+const CALL_TYPE_AGE_BUCKETS = [
+  { key: "0-24", label: "00–24 Hrs", min: 0, max: 24 },
+  { key: "24-48", label: "24–48 Hrs", min: 24.0001, max: 48 },
+  { key: "48-96", label: "48–96 Hrs", min: 48.0001, max: 96 },
+  { key: "96+", label: ">96 Hrs", min: 96.0001, max: Infinity },
+];
+
+/** Tickets that needed a dispatched part (linked MRF) vs. tickets resolved without one. */
+function callTypeForRow(row: Record<string, unknown>): "Part Tickets" | "Non Part Tickets" {
+  const mrfApproval = String(row.mrf_approval ?? "").trim();
+  return mrfApproval && mrfApproval !== "No MRF" ? "Part Tickets" : "Non Part Tickets";
+}
+
+/**
+ * Call Type × Customer Type × Age-in-hours matrix, with count and percentage
+ * per cell. When a Customer Name filter is active, this pivots to
+ * Customer Name × Call Type instead, so the same table shows a per-customer
+ * breakdown.
+ */
+function buildCallTypeAgeMatrix(rows: Record<string, unknown>[], groupByCustomerName: boolean) {
+  const total = rows.length;
+  const structure = new Map<string, Map<string, Map<string, number>>>();
+
+  for (const row of rows) {
+    const callType = callTypeForRow(row);
+    const groupLabel = groupByCustomerName
+      ? String(row.customer_name ?? "Not Recorded").trim() || "Not Recorded"
+      : String(row.customer_type ?? "Not Recorded").trim() || "Not Recorded";
+    const tatMinutes = closureTatMinutes(row);
+    const hours = tatMinutes != null ? tatMinutes / 60 : null;
+    const bucket = hours == null ? null : CALL_TYPE_AGE_BUCKETS.find((b) => hours >= b.min && hours <= b.max);
+    if (!bucket) continue;
+
+    const outerKey = groupByCustomerName ? groupLabel : callType;
+    const innerKey = groupByCustomerName ? callType : groupLabel;
+    if (!structure.has(outerKey)) structure.set(outerKey, new Map());
+    const inner = structure.get(outerKey)!;
+    if (!inner.has(innerKey)) inner.set(innerKey, new Map());
+    const byBucket = inner.get(innerKey)!;
+    byBucket.set(bucket.key, (byBucket.get(bucket.key) ?? 0) + 1);
+  }
+
+  const matrixRows = [];
+  for (const [outerKey, inner] of structure.entries()) {
+    for (const [innerKey, byBucket] of inner.entries()) {
+      const cells = CALL_TYPE_AGE_BUCKETS.map((b) => {
+        const count = byBucket.get(b.key) ?? 0;
+        return {
+          bucket: b.label,
+          count,
+          pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+        };
+      });
+      const rowTotal = cells.reduce((sum, c) => sum + c.count, 0);
+      const callType = groupByCustomerName ? innerKey : outerKey;
+      const groupLabel = groupByCustomerName ? outerKey : innerKey;
+      matrixRows.push({ callType, groupLabel, cells, total: rowTotal });
+    }
+  }
+  matrixRows.sort((a, b) => a.callType.localeCompare(b.callType) || b.total - a.total);
+
+  return {
+    groupBy: groupByCustomerName ? ("customerName" as const) : ("customerType" as const),
+    buckets: CALL_TYPE_AGE_BUCKETS.map((b) => b.label),
+    rows: matrixRows,
+    grandTotal: total,
+  };
+}
+
+export function summarizeClosureDashboard(rows: Record<string, unknown>[], params: AnalyticsParams = {}) {
   const total = rows.length;
   const tatValues = rows
     .map(closureTatMinutes)
@@ -1048,6 +1220,8 @@ export function summarizeClosureDashboard(rows: Record<string, unknown>[]) {
     tatBuckets,
     closureTypes: closureBreakdown(rows, (row) => row.closure_type),
     products: closureBreakdown(rows, (row) => row.product),
+    allProducts: closureBreakdown(rows, (row) => row.product, 9999),
+    callTypeAgeMatrix: buildCallTypeAgeMatrix(rows, Boolean(params.customerName)),
     customerCategories: closureBreakdown(rows, (row) => row.customer_category),
     regions: closureBreakdown(rows, resolveRegion),
     servicePartners: closureBreakdown(rows, (row) => row.service_partner_name, 12),
@@ -1116,7 +1290,7 @@ function mergeOps(target: OpsBucket, source: OpsBucket) {
 }
 
 function accumulateOps(bucket: OpsBucket, row: Record<string, unknown>) {
-  const age = ticketAgeDays(row.created_on as string);
+  const age = rowAgeDays(row);
   const status = bucketStatus(row);
   if (status === "Assigned") {
     bucket.assigned += 1;
@@ -1227,7 +1401,7 @@ function operationalReasonBreakdown(
 
   for (const row of scoped) {
     const reason = operationalReasonForRow(row, status);
-    const age = ticketAgeDays(row.created_on as string);
+    const age = rowAgeDays(row);
     const current = grouped.get(reason) ?? { count: 0, ageSum: 0, critical: 0 };
     current.count += 1;
     current.ageSum += age;
@@ -1270,6 +1444,8 @@ export function summarizeLiveOperationsDashboard(
   activeRows: Record<string, unknown>[],
   closedRows: Record<string, unknown>[] = [],
 ) {
+  // Ages already stamped in fetchActive against the full extract; keep that basis.
+  dataAsOfFromRows(activeRows);
   const total = activeRows.length;
   const root = emptyOpsBucket();
   for (const row of activeRows) accumulateOps(root, row);
@@ -1353,7 +1529,7 @@ export function summarizeLiveOperationsDashboard(
     const nationalHead = String(row.national_head ?? "Unassigned").trim() || "Unassigned";
     const product = String(row.product ?? "Unknown").trim() || "Unknown";
     const region = resolveRegion(row);
-    const age = ticketAgeDays(row.created_on as string);
+    const age = rowAgeDays(row);
 
     const p =
       partnerMap.get(partner) ??
@@ -1533,7 +1709,7 @@ export function summarizeLiveOperationsDashboard(
     .map((row) => {
       const status = bucketStatus(row);
       const rawStatus = String(row.ticket_status ?? "").toLowerCase();
-      const isCritical = ageUrgency(ticketAgeDays(row.created_on as string)) === "red";
+      const isCritical = ageUrgency(rowAgeDays(row)) === "red";
       let type = "Status Updated";
       if (isCritical) type = "Escalation Raised";
       else if (rawStatus.includes("close")) type = "Ticket Closed";
@@ -1666,7 +1842,7 @@ export function summarizeLiveOperationsDashboard(
   const ageingBuckets = ageBucketDefs.map((b) => ({
     label: b.label,
     count: activeRows.filter((r) => {
-      const age = ticketAgeDays(r.created_on as string);
+      const age = rowAgeDays(r);
       return age >= b.min && age <= b.max;
     }).length,
   }));
@@ -1679,7 +1855,7 @@ export function summarizeLiveOperationsDashboard(
     region: string;
   } | null = null;
   for (const row of activeRows) {
-    const age = ticketAgeDays(row.created_on as string);
+    const age = rowAgeDays(row);
     if (!longestAgeingTicket || age > longestAgeingTicket.days) {
       longestAgeingTicket = {
         ticketId: String(row.ticket_id ?? "—"),
@@ -1712,13 +1888,14 @@ export function summarizeLiveOperationsDashboard(
     const cat = String(row.customer_category ?? "Unknown").trim() || "Unknown";
     categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + 1);
   }
+  // Note: these are NOT capped here — the "All" option in the UI's per-panel
+  // "Show" selector relies on receiving the complete list. Panels default to
+  // showing only the first 5/6 client-side and expand when "All" is chosen.
   const topCities = [...cityMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
     .map(([city, count]) => ({ city, count }));
   const categoryBreakdown = [...categoryMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
     .map(([category, count]) => ({
       category,
       count,
@@ -1734,7 +1911,7 @@ export function summarizeLiveOperationsDashboard(
     operationalReasons,
     topCities,
     categoryBreakdown,
-    topManagers: reportingManagers.slice(0, 5).map((m, i) => ({
+    topManagers: reportingManagers.map((m, i) => ({
       rank: i + 1,
       name: m.name,
       openCalls: m.openCalls,
@@ -1742,8 +1919,8 @@ export function summarizeLiveOperationsDashboard(
       avgAge: m.avgAge,
       partnersManaged: m.partnersManaged,
     })),
-    topRsh: rshLeaderboard.slice(0, 5),
-    topRegions: regionalHeatmap.slice(0, 6),
+    topRsh: rshLeaderboard,
+    topRegions: regionalHeatmap,
   };
 
   const charts = {

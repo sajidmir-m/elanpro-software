@@ -28,8 +28,9 @@ import {
   summarizeLiveOperationsDashboard,
   type AnalyticsParams,
 } from "../lib/analytics";
-import { ticketAgeDays } from "../lib/ticket-query";
+import { attachTicketAges, rowAgeDays } from "../lib/ticket-query";
 import { componentCategory } from "../lib/component-taxonomy";
+import { matchesServicePartner } from "../lib/filters";
 
 const router: IRouter = Router();
 
@@ -50,8 +51,9 @@ router.get("/analytics/live-operations", requireAuth, async (req, res): Promise<
 
 router.get("/analytics/closure-operations", requireAuth, async (req, res): Promise<void> => {
   try {
-    const closed = await fetchClosed(q(req));
-    res.json(summarizeClosureDashboard(closed));
+    const params = q(req);
+    const closed = await fetchClosed(params);
+    res.json(summarizeClosureDashboard(closed, params));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load closure analytics dashboard" });
@@ -68,6 +70,7 @@ router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<voi
 
     const params: AnalyticsParams = { ...q(req), ticketStatus: null };
     const active = await fetchActive(params);
+    attachTicketAges(active);
     const rows = active
       .filter((row) => bucketStatus(row) === requestedStatus)
       .map((row) => ({
@@ -84,16 +87,19 @@ router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<voi
         category: String(row.category ?? "—"),
         customer: String(row.customer_name ?? "—"),
         customerCategory: String(row.customer_category ?? "—"),
+        address: String(row.ticket_territory ?? row.state ?? "—").trim() || "—",
         city: String(row.city ?? "—"),
         state: String(row.state ?? "—"),
         components: String(row.components ?? "—"),
+        reOpenTicket: String(row.re_open_ticket ?? "No"),
+        repeatTicket: String(row.repeat_ticket ?? "No"),
         mrfApproval: String(row.mrf_approval ?? "No MRF"),
         mrfStatus: String(row.mrf_status ?? "—"),
         mrfComponents: String(row.mrf_components ?? "—"),
         mrfApprovedBy: String(row.mrf_approved_by ?? "—"),
         mrfApprovedDate: row.mrf_approved_date ?? null,
         mrfDispatchDate: row.mrf_dispatch_date ?? null,
-        ageDays: ticketAgeDays(row.created_on as string),
+        ageDays: rowAgeDays(row),
         createdOn: row.created_on ?? null,
       }))
       .sort((a, b) => b.ageDays - a.ageDays);
@@ -141,10 +147,11 @@ router.get("/analytics/live-operations/drilldown", requireAuth, async (req, res)
     if (view === "statuses") params.ticketStatus = null;
 
     const active = await fetchActive(params);
+    attachTicketAges(active);
     const groups = new Map<string, { count: number; overdue: number; ageSum: number }>();
     const rows = active.map((row) => {
       const group = String(definition.value(row) ?? "").trim() || "Not recorded";
-      const ageDays = ticketAgeDays(row.created_on as string);
+      const ageDays = rowAgeDays(row);
       const aggregate = groups.get(group) ?? { count: 0, overdue: 0, ageSum: 0 };
       aggregate.count += 1;
       aggregate.ageSum += ageDays;
@@ -158,6 +165,7 @@ router.get("/analytics/live-operations/drilldown", requireAuth, async (req, res)
         ageDays,
         customer: String(row.customer_name ?? "—"),
         customerCategory: String(row.customer_category ?? "—"),
+        address: String(row.ticket_territory ?? row.state ?? "—").trim() || "—",
         city: String(row.city ?? "—"),
         state: String(row.state ?? "—"),
         servicePartner: String(row.service_partner_name ?? "—"),
@@ -173,6 +181,8 @@ router.get("/analytics/live-operations/drilldown", requireAuth, async (req, res)
         wipSubStage: String(row.wip_sub_stage ?? "—"),
         lastAction: String(row.last_action ?? "—"),
         components: String(row.components ?? "—"),
+        reOpenTicket: String(row.re_open_ticket ?? "No"),
+        repeatTicket: String(row.repeat_ticket ?? "No"),
         mrfApproval: String(row.mrf_approval ?? "No MRF"),
         mrfStatus: String(row.mrf_status ?? "—"),
         mrfComponents: String(row.mrf_components ?? "—"),
@@ -297,17 +307,15 @@ router.get("/analytics/consumption", requireAuth, async (req, res): Promise<void
       ticketsById.set(String(t.ticket_id), t);
     }
 
-    if (params.ash) mrf = mrf.filter((r) => String(r.ash ?? "").toLowerCase() === String(params.ash).toLowerCase());
+    if (params.ash) mrf = mrf.filter((r) => matchesServicePartner(r.ash, params.ash));
     if (params.servicePartner) {
-      mrf = mrf.filter(
-        (r) => String(r.service_partner_name ?? "").toLowerCase() === String(params.servicePartner).toLowerCase(),
-      );
+      mrf = mrf.filter((r) => matchesServicePartner(r.service_partner_name, params.servicePartner));
     }
     if (params.area) {
       mrf = mrf.filter((r) => String(r.state ?? r.dispatch_state ?? "").toLowerCase() === String(params.area).toLowerCase());
     }
     if (params.product) {
-      mrf = mrf.filter((r) => String(r.product ?? "").toLowerCase() === String(params.product).toLowerCase());
+      mrf = mrf.filter((r) => matchesServicePartner(r.product, params.product));
     }
     if (params.category) {
       mrf = mrf.filter((r) => String(r.category ?? "").toLowerCase() === String(params.category).toLowerCase());
@@ -821,9 +829,11 @@ router.get("/analytics/records", requireAuth, async (req, res): Promise<void> =>
     if (dataset === "active_age_summary") {
       rows = summarizeActiveByAge(await fetchActive(params));
     } else if (dataset === "active_call_tickets") {
-      rows = (await fetchActive(params))
+      const active = await fetchActive(params);
+      attachTicketAges(active);
+      rows = active
         .map((row) => {
-          const age = ticketAgeDays(row.created_on as string);
+          const age = rowAgeDays(row);
           const level = ageUrgency(age);
           return {
             ticket_id: row.ticket_id,

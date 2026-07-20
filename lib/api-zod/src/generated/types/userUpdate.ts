@@ -14,6 +14,7 @@ export interface UserUpdate {
   isActive?: boolean;
   /** @nullable */
   managerId?: string | null;
+  /** @nullable */
   department?: string | null;
   permissions?: string[];
 }

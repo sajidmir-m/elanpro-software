@@ -134,6 +134,7 @@ function mapMrfData(row: Record<string, unknown>, uploadId: number) {
     ashApprovedDate: str(row["ASH Approved Date"]),
     approvedBy: str(row["Approved By"]),
     approvedDate: str(row["Approved Date"]),
+    npcApproval: str(row["NPC Approval"]),
     dispatchFrom: str(row["Dispatch From"]),
     dispatchDate: str(row["Dispatch Date"]),
     courierName: str(row["Courier Name"]),

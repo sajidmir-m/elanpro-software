@@ -8,16 +8,17 @@ import {
   ActionCards,
   AgeDistributionCard,
   AnalyticsInsightsPanel,
+  AshWorkloadTable,
   CallAgeQuickFilters,
   CriticalTicketsTable,
   ExecutiveSummaryCard,
   ExportButton,
   PremiumKpiGrid,
-  RiskRegionsTable,
   RshWorkloadTable,
+  TopServicePartnersAtRiskTable,
   TrendPanel,
 } from "@/components/call-age";
-import { fetchCallAgeDashboard, type AnalyticsQuery } from "@/lib/analytics-api";
+import { fetchCallAgeDashboard, serializeMultiValue, type AnalyticsQuery } from "@/lib/analytics-api";
 
 const CALL_AGE_FIELDS: FilterField[] = [
   "search",
@@ -25,10 +26,11 @@ const CALL_AGE_FIELDS: FilterField[] = [
   "warranty",
   "ticketStatus",
   "dateRangeDays",
-  "region",
   "rsh",
   "ash",
   "servicePartner",
+  "customerCategory",
+  "customerName",
   "product",
 ];
 
@@ -51,6 +53,8 @@ function toAnalyticsQuery(filters: FilterBarState): AnalyticsQuery {
     ash: filters.ash,
     servicePartner: filters.servicePartner,
     product: filters.product,
+    customerCategory: filters.customerCategory,
+    customerName: filters.customerName,
     dateRangeDays: filters.dateRangeDays,
   };
 }
@@ -100,6 +104,14 @@ export default function CallAge() {
           <p className="mt-2 max-w-3xl text-xs text-muted-foreground">
             SLA goal: resolve within 3 days. Critical means older than 5 days, independent of uploaded priority.
             Average age covers all open calls; oldest age is the single longest-open call.
+            {data?.dataAsOf ? (
+              <>
+                {" "}
+                Ages are calculated as of the upload snapshot date{" "}
+                <span className="font-medium text-foreground">{data.dataAsOf}</span>
+                {" "}(latest Created On in the file), not today — so Green / Orange / Red match the extract.
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -166,6 +178,8 @@ export default function CallAge() {
                     ageMix={data.ageMix}
                     stats={data.stats}
                     total={data.totalTickets}
+                    filters={filters}
+                    onFilterChange={applyFilter}
                   />
                   <TrendPanel trends={data.trends} />
                 </>
@@ -181,15 +195,26 @@ export default function CallAge() {
           ) : (
             data && (
               <div className="grid gap-6 xl:grid-cols-2">
-                <RiskRegionsTable
-                  rows={data.topRiskRegions}
-                  onRegionClick={(region) => applyFilter({ region })}
+                <TopServicePartnersAtRiskTable
+                  rows={data.topServicePartnersAtRisk}
+                  onPartnerClick={(servicePartner) => applyFilter({ servicePartner })}
                 />
                 <RshWorkloadTable
                   rows={data.topRshWorkload}
                   onRshClick={(rsh) => applyFilter({ rsh })}
                 />
               </div>
+            )
+          )}
+
+          {busy ? (
+            <Skeleton className="h-96 rounded-2xl" />
+          ) : (
+            data && (
+              <AshWorkloadTable
+                rows={data.topAshWorkload}
+                onAshClick={(ash) => applyFilter({ ash })}
+              />
             )
           )}
 
@@ -223,8 +248,11 @@ export default function CallAge() {
               <AnalyticsInsightsPanel
                 stats={data.stats}
                 byProduct={data.byProduct}
-                byRegionAge={data.byRegionAge}
                 byRshAge={data.byRshAge}
+                byAshAge={data.byAshAge}
+                onFilterRsh={(values) => applyFilter({ rsh: serializeMultiValue(values ?? []) })}
+                onFilterAsh={(values) => applyFilter({ ash: serializeMultiValue(values ?? []) })}
+                onFilterProduct={(values) => applyFilter({ product: serializeMultiValue(values ?? []) })}
               />
             )
           )}

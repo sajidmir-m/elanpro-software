@@ -17,11 +17,6 @@ export interface MessageResponse {
   message: string;
 }
 
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
 export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 
@@ -46,10 +41,6 @@ export interface User {
   /** @nullable */
   department?: string | null;
   createdAt?: string;
-}
-
-export interface AuthResult {
-  user: User;
 }
 
 export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
@@ -111,7 +102,6 @@ export const UploadFileType = {
   active_tickets: 'active_tickets',
   closed_tickets: 'closed_tickets',
   mrf_data: 'mrf_data',
-  sales_data: 'sales_data',
 } as const;
 
 export type UploadStatus = typeof UploadStatus[keyof typeof UploadStatus];
@@ -141,7 +131,6 @@ export const UploadInputFileType = {
   active_tickets: 'active_tickets',
   closed_tickets: 'closed_tickets',
   mrf_data: 'mrf_data',
-  sales_data: 'sales_data',
 } as const;
 
 export interface UploadInput {
@@ -165,11 +154,13 @@ export interface DashboardSummary {
   totalActive: number;
   totalClosed: number;
   totalMrf: number;
+  mrfPendingNpcApproval: number;
   /** @nullable */
   avgTatMinutes: number | null;
   pendingByAge: DashboardSummaryPendingByAge;
   byState: CountByLabel[];
   byCategory: CountByLabel[];
+  byCustomerCategory: CountByLabel[];
   recentUploads: Upload[];
 }
 

@@ -16,6 +16,7 @@ export interface User {
   permissions: string[];
   /** @nullable */
   managerId?: string | null;
+  /** @nullable */
   department?: string | null;
   createdAt?: string;
 }

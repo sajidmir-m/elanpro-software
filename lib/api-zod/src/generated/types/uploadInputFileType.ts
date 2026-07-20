@@ -13,5 +13,4 @@ export const UploadInputFileType = {
   active_tickets: 'active_tickets',
   closed_tickets: 'closed_tickets',
   mrf_data: 'mrf_data',
-  sales_data: 'sales_data',
 } as const;

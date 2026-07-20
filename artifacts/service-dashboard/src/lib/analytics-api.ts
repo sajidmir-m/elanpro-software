@@ -31,6 +31,9 @@ export type AnalyticsQuery = {
   pageSize?: number | null;
   sortBy?: string | null;
   sortDir?: "asc" | "desc" | null;
+  customerCategory?: string | null;
+  customerName?: string | null;
+  closureType?: string | null;
 };
 
 export type ColumnDef = {
@@ -63,9 +66,12 @@ export type StatusCallRow = {
   category: string;
   customer: string;
   customerCategory: string;
+  address: string;
   city: string;
   state: string;
   components: string;
+  reOpenTicket: string;
+  repeatTicket: string;
   mrfApproval: string;
   mrfStatus: string;
   mrfComponents: string;
@@ -105,6 +111,7 @@ export type LiveOpsDrilldownRow = {
   ageDays: number;
   customer: string;
   customerCategory: string;
+  address: string;
   city: string;
   state: string;
   servicePartner: string;
@@ -120,6 +127,8 @@ export type LiveOpsDrilldownRow = {
   wipSubStage: string;
   lastAction: string;
   components: string;
+  reOpenTicket: string;
+  repeatTicket: string;
   mrfApproval: string;
   mrfStatus: string;
   mrfComponents: string;
@@ -143,12 +152,16 @@ export type FilterOptions = {
   servicePartners: string[];
   ashList: string[];
   rshList: string[];
+  /** Saved RSH name → ASHs that report to that RSH */
+  ashesByRsh?: Record<string, string[]>;
   states: string[];
   regions: string[];
   warrantyTypes: string[];
   ticketTypes: string[];
   nationalHeads?: string[];
   componentCategories: string[];
+  customerCategories?: string[];
+  closureTypes?: string[];
   /** Saved RSH name → partners resolved through saved ASH assignments */
   partnersByRsh?: Record<string, string[]>;
   /** Saved ASH/Reporting Manager name → partners in active tickets */
@@ -190,6 +203,19 @@ export type ClosureBreakdownRow = {
   within24Pct: number | null;
 };
 
+export type CallTypeAgeMatrix = {
+  /** Whether `groupLabel` on each row represents Customer Type or Customer Name. */
+  groupBy: "customerType" | "customerName";
+  buckets: string[];
+  rows: Array<{
+    callType: string;
+    groupLabel: string;
+    total: number;
+    cells: Array<{ bucket: string; count: number; pct: number }>;
+  }>;
+  grandTotal: number;
+};
+
 export type ClosureDashboard = {
   refreshedAt: string;
   totalClosed: number;
@@ -205,6 +231,9 @@ export type ClosureDashboard = {
   tatBuckets: Array<{ label: string; count: number; color: string }>;
   closureTypes: ClosureBreakdownRow[];
   products: ClosureBreakdownRow[];
+  /** Full, uncapped product breakdown for the all-products pie/bar chart. */
+  allProducts: ClosureBreakdownRow[];
+  callTypeAgeMatrix: CallTypeAgeMatrix;
   customerCategories: ClosureBreakdownRow[];
   regions: ClosureBreakdownRow[];
   servicePartners: ClosureBreakdownRow[];
@@ -230,6 +259,8 @@ export async function fetchClosureDashboard(params: AnalyticsQuery) {
 
 export type CallAgeDashboard = {
   totalTickets: number;
+  /** Snapshot end date (DD-MM-YYYY) used for Green/Orange/Red age buckets. */
+  dataAsOf?: string;
   ageMix: Array<{ label: string; count: number; color?: string }>;
   kpis: {
     total: { value: number; pct: number; trendPct: number | null; sparkline: number[] };
@@ -268,11 +299,34 @@ export type CallAgeDashboard = {
     withinFiveDaysPct: number;
     badge: string;
   }>;
+  topAshWorkload: Array<{
+    ash: string;
+    totalCalls: number;
+    urgentCalls: number;
+    avgAge: number;
+    oldestTicket: number;
+    performanceScore: number;
+    withinFiveDaysPct: number;
+    badge: string;
+  }>;
+  topServicePartnersAtRisk: Array<{
+    rank: number;
+    servicePartner: string;
+    rshList: string[];
+    green: number;
+    orange: number;
+    red: number;
+    total: number;
+    avgAge: number;
+    oldestTicket: number;
+    overduePct: number;
+  }>;
   criticalTickets: Array<Record<string, unknown>>;
   recommendedActions: Array<{ id: string; tone: "warning" | "info" | "critical"; message: string }>;
   byProduct: Array<{ label: string; count: number }>;
   byRegionAge: Array<{ label: string; green: number; orange: number; red: number; total: number }>;
   byRshAge: Array<{ label: string; green: number; orange: number; red: number; total: number }>;
+  byAshAge: Array<{ label: string; green: number; orange: number; red: number; total: number }>;
   trends: {
     daily: Array<{ label: string; count: number }>;
     weekly: Array<{ label: string; count: number }>;
@@ -577,8 +631,11 @@ export async function fetchPartnersByAsh(ash: string): Promise<{ ash: string; pa
   );
 }
 
-/** Multi-partner filter uses "||" delimiter (partner names may contain commas). */
-export function parseServicePartners(value?: string | null): string[] {
+/**
+ * Multi-value filter uses "||" delimiter (names may contain commas).
+ * Shared by Service Partner, RSH and ASH "browse and pick many" filters.
+ */
+export function parseMultiValue(value?: string | null): string[] {
   if (!value || value === "all") return [];
   return String(value)
     .split("||")
@@ -586,9 +643,69 @@ export function parseServicePartners(value?: string | null): string[] {
     .filter(Boolean);
 }
 
-export function serializeServicePartners(partners: string[]): string | null {
-  const clean = [...new Set(partners.map((p) => p.trim()).filter(Boolean))];
+export function serializeMultiValue(values: string[]): string | null {
+  const clean = [...new Set(values.map((v) => v.trim()).filter(Boolean))];
   if (clean.length === 0) return null;
   if (clean.length === 1) return clean[0]!;
   return clean.join("||");
+}
+
+/** @deprecated use parseMultiValue */
+export const parseServicePartners = parseMultiValue;
+/** @deprecated use serializeMultiValue */
+export const serializeServicePartners = serializeMultiValue;
+
+export type ReportRole = "rsh" | "ash" | "service_partner" | "manager" | "admin";
+
+export type ReportRecipient = {
+  id: string;
+  name: string;
+  email: string;
+  role: ReportRole;
+  isActive: boolean;
+};
+
+export type SendLiveOpsReportPayload = {
+  audiences: ReportRole[];
+  filters: AnalyticsQuery;
+  extraRecipients?: string[];
+  dryRun?: boolean;
+};
+
+export type SendLiveOpsReportResult = {
+  dryRun: boolean;
+  totalRecipients: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  results: Array<{ email: string; name: string; scope: string; status: "sent" | "failed" | "skipped"; error?: string }>;
+};
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function fetchLiveOpsReportRecipients(): Promise<ReportRecipient[]> {
+  return authFetch<ReportRecipient[]>(`/api/reports/live-operations/recipients`);
+}
+
+export async function fetchLiveOpsReportPreviewHtml(params: AnalyticsQuery): Promise<string> {
+  const headers = await authHeaders();
+  const res = await fetch(resolveApiUrl(`/api/reports/live-operations/preview${toQuery(params)}`), { headers });
+  if (!res.ok) throw new Error(`Preview failed (${res.status})`);
+  return res.text();
+}
+
+export async function sendLiveOpsReport(payload: SendLiveOpsReportPayload): Promise<SendLiveOpsReportResult> {
+  const headers = await authHeaders();
+  const res = await fetch(resolveApiUrl(`/api/reports/live-operations/send`), {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.message || body.error || `Request failed (${res.status})`);
+  return body as SendLiveOpsReportResult;
 }

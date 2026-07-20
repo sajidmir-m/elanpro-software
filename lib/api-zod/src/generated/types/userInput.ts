@@ -14,6 +14,7 @@ export interface UserInput {
   role: UserInputRole;
   /** @nullable */
   managerId?: string | null;
+  /** @nullable */
   department?: string | null;
   permissions?: string[];
 }

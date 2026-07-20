@@ -13,8 +13,11 @@ export type FilterParams = {
   search?: string | null;
 };
 
-/** Split multi-partner filter. Delimiter is "||" so partner names can contain commas. */
-export function parseServicePartners(value?: string | null): string[] {
+/**
+ * Generic multi-value filter. Delimiter is "||" so names can contain commas.
+ * Shared by Service Partner, RSH and ASH "browse and pick many" filters.
+ */
+export function parseMultiValue(value?: string | null): string[] {
   if (!value || value === "all") return [];
   return String(value)
     .split("||")
@@ -22,19 +25,26 @@ export function parseServicePartners(value?: string | null): string[] {
     .filter(Boolean);
 }
 
-export function serializeServicePartners(partners: string[]): string | null {
-  const clean = [...new Set(partners.map((p) => p.trim()).filter(Boolean))];
+export function serializeMultiValue(values: string[]): string | null {
+  const clean = [...new Set(values.map((v) => v.trim()).filter(Boolean))];
   if (clean.length === 0) return null;
   if (clean.length === 1) return clean[0]!;
   return clean.join("||");
 }
 
-export function matchesServicePartner(rowPartner: unknown, filter?: string | null): boolean {
-  const partners = parseServicePartners(filter);
-  if (partners.length === 0) return true;
-  const actual = String(rowPartner ?? "").trim().toLowerCase();
-  return partners.some((p) => p.toLowerCase() === actual);
+export function matchesMultiValue(rowValue: unknown, filter?: string | null): boolean {
+  const values = parseMultiValue(filter);
+  if (values.length === 0) return true;
+  const actual = String(rowValue ?? "").trim().toLowerCase();
+  return values.some((v) => v.toLowerCase() === actual);
 }
+
+/** @deprecated use parseMultiValue — kept for existing imports. */
+export const parseServicePartners = parseMultiValue;
+/** @deprecated use serializeMultiValue — kept for existing imports. */
+export const serializeServicePartners = serializeMultiValue;
+/** @deprecated use matchesMultiValue — kept for existing imports. */
+export const matchesServicePartner = matchesMultiValue;
 
 export function classifyWarranty(supportType: unknown): "in" | "out" | "other" {
   const s = String(supportType ?? "").toLowerCase();
@@ -100,27 +110,23 @@ export function buildTicketFilters(
   if (normalized.category) {
     add("LOWER(category) = LOWER(?)", normalized.category);
   }
-  if (normalized.product) {
-    add("LOWER(product) = LOWER(?)", normalized.product);
-  }
-  if (normalized.servicePartner) {
-    const partners = parseServicePartners(normalized.servicePartner);
-    if (partners.length === 1) {
-      add("LOWER(service_partner_name) = LOWER(?)", partners[0]);
-    } else if (partners.length > 1) {
-      const placeholders = partners.map((p) => {
-        values.push(p);
+  function addMultiValue(column: string, filter: string | null | undefined) {
+    const list = parseMultiValue(filter);
+    if (list.length === 1) {
+      add(`LOWER(${column}) = LOWER(?)`, list[0]);
+    } else if (list.length > 1) {
+      const placeholders = list.map((v) => {
+        values.push(v);
         return `LOWER($${values.length})`;
       });
-      conditions.push(`LOWER(service_partner_name) IN (${placeholders.join(", ")})`);
+      conditions.push(`LOWER(${column}) IN (${placeholders.join(", ")})`);
     }
   }
-  if (normalized.ash) {
-    add("LOWER(ash) = LOWER(?)", normalized.ash);
-  }
-  if (normalized.rsh) {
-    add("LOWER(rsh) = LOWER(?)", normalized.rsh);
-  }
+
+  addMultiValue("product", normalized.product);
+  addMultiValue("service_partner_name", normalized.servicePartner);
+  addMultiValue("ash", normalized.ash);
+  addMultiValue("rsh", normalized.rsh);
   if (normalized.state) {
     add("LOWER(state) = LOWER(?)", normalized.state);
   }

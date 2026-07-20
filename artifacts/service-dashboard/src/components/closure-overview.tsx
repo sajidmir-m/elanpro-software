@@ -8,6 +8,9 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosureBreakdownRow, ClosureDashboard } from "@/lib/analytics-api";
+import { AllProductsChart } from "@/components/closure/AllProductsChart";
+import { CallTypeAgeMatrixTable } from "@/components/closure/CallTypeAgeMatrixTable";
+import { HideableSection } from "@/components/hideable-section";
 
 function formatHours(hours: number): string {
   if (hours < 24) return `${hours}h`;
@@ -119,13 +122,13 @@ function BreakdownPanel({
 export function ClosureOverview({
   data,
   onSelectProduct,
-  onSelectRegion,
+  onSelectCustomerCategory,
   onSelectPartner,
   onSelectManager,
 }: {
   data: ClosureDashboard;
   onSelectProduct: (value: string) => void;
-  onSelectRegion: (value: string) => void;
+  onSelectCustomerCategory: (value: string) => void;
   onSelectPartner: (value: string) => void;
   onSelectManager: (value: string) => void;
 }) {
@@ -210,59 +213,66 @@ export function ClosureOverview({
         />
       </section>
 
+      {data.callTypeAgeMatrix && (
+        <HideableSection title="Call Type × Age matrix" subtitle="Matrix table is hidden.">
+          <CallTypeAgeMatrixTable matrix={data.callTypeAgeMatrix} />
+        </HideableSection>
+      )}
+
+      <AllProductsChart rows={data.allProducts ?? data.products} onSelect={onSelectProduct} />
+
       <section className="grid gap-4 lg:grid-cols-2">
-        <BreakdownPanel
-          title="Products Closed"
-          subtitle="Completed-call volume and average TAT by product"
-          rows={data.products}
-          color="#0D9488"
-          onSelect={onSelectProduct}
-        />
-        <BreakdownPanel
-          title="Customer Categories"
-          subtitle="Customer type—not product category"
-          rows={data.customerCategories}
-          color="#8B5CF6"
-        />
-        <BreakdownPanel
-          title="Regions"
-          subtitle="Closure performance across uploaded territories"
-          rows={data.regions}
-          color="#F59E0B"
-          onSelect={onSelectRegion}
-        />
-        <BreakdownPanel
-          title="Warranty / Support"
-          subtitle="Closure workload by recorded warranty status"
-          rows={data.warranty}
-          color="#16A34A"
-        />
-        <BreakdownPanel
-          title="Service Partner Performance"
-          subtitle="Closed-call volume, average TAT and 24-hour completion"
-          rows={data.servicePartners}
-          color="#2563EB"
-          onSelect={onSelectPartner}
-        />
-        <BreakdownPanel
-          title="Reporting Manager Performance"
-          subtitle="Completed work grouped by saved Reporting Manager"
-          rows={data.reportingManagers}
-          color="#DC2626"
-          onSelect={onSelectManager}
-        />
-        <BreakdownPanel
-          title="Closed By"
-          subtitle="Person or source recorded as closing the ticket"
-          rows={data.closedBy}
-          color="#64748B"
-        />
-        <BreakdownPanel
-          title="MRF Approval"
-          subtitle="Approval state linked by Ticket ID"
-          rows={data.mrfApproval}
-          color="#F97316"
-        />
+        <HideableSection title="Customer Categories">
+          <BreakdownPanel
+            title="Customer Categories"
+            subtitle="Customer type—not product category"
+            rows={data.customerCategories}
+            color="#8B5CF6"
+            onSelect={onSelectCustomerCategory}
+          />
+        </HideableSection>
+        <HideableSection title="Warranty / Support">
+          <BreakdownPanel
+            title="Warranty / Support"
+            subtitle="Closure workload by recorded warranty status"
+            rows={data.warranty}
+            color="#16A34A"
+          />
+        </HideableSection>
+        <HideableSection title="Service Partner Performance">
+          <BreakdownPanel
+            title="Service Partner Performance"
+            subtitle="Closed-call volume, average TAT and 24-hour completion"
+            rows={data.servicePartners}
+            color="#2563EB"
+            onSelect={onSelectPartner}
+          />
+        </HideableSection>
+        <HideableSection title="Reporting Manager Performance">
+          <BreakdownPanel
+            title="Reporting Manager Performance"
+            subtitle="Completed work grouped by saved Reporting Manager"
+            rows={data.reportingManagers}
+            color="#DC2626"
+            onSelect={onSelectManager}
+          />
+        </HideableSection>
+        <HideableSection title="Closed By">
+          <BreakdownPanel
+            title="Closed By"
+            subtitle="Person or source recorded as closing the ticket"
+            rows={data.closedBy}
+            color="#64748B"
+          />
+        </HideableSection>
+        <HideableSection title="MRF Approval">
+          <BreakdownPanel
+            title="MRF Approval"
+            subtitle="Approval state linked by Ticket ID"
+            rows={data.mrfApproval}
+            color="#F97316"
+          />
+        </HideableSection>
       </section>
     </div>
   );

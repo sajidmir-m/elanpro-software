@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
 import { componentCategory } from "../lib/component-taxonomy";
-import { fetchDistinctTicketValues, fetchMrfRows, fetchPartnerHierarchyMaps } from "../lib/ticket-query";
+import {
+  fetchDistinctTicketValues,
+  fetchMrfRows,
+  fetchPartnerHierarchyMaps,
+  fetchResolvedHierarchyNames,
+} from "../lib/ticket-query";
 import { fetchReportingHierarchyDirectory } from "../lib/reporting-hierarchy";
 
 const router: IRouter = Router();
@@ -19,6 +24,9 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       ticketTypes,
       mrfRows,
       partnerHierarchy,
+      resolvedHierarchyNames,
+      customerCategories,
+      closureTypes,
     ] = await Promise.all([
       fetchDistinctTicketValues("category"),
       fetchDistinctTicketValues("product"),
@@ -30,7 +38,16 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       fetchDistinctTicketValues("ticket_type"),
       fetchMrfRows(),
       fetchPartnerHierarchyMaps(),
+      fetchResolvedHierarchyNames(),
+      fetchDistinctTicketValues("customer_category"),
+      fetchDistinctTicketValues("closure_type", ["closed_tickets"]),
     ]);
+    const ashList = [...new Set([...hierarchyDirectory.ashList, ...resolvedHierarchyNames.ashList])].sort(
+      (a, b) => a.localeCompare(b),
+    );
+    const rshList = [...new Set([...hierarchyDirectory.rshList, ...resolvedHierarchyNames.rshList])].sort(
+      (a, b) => a.localeCompare(b),
+    );
     const componentCategories = [
       ...new Set(mrfRows.map((row) => componentCategory(row.component_name))),
     ].sort((a, b) => a.localeCompare(b));
@@ -39,13 +56,16 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       categories,
       products,
       servicePartners: partners,
-      ashList: hierarchyDirectory.ashList,
-      rshList: hierarchyDirectory.rshList,
+      ashList,
+      rshList,
+      ashesByRsh: hierarchyDirectory.ashesByRsh,
       states,
       regions,
       warrantyTypes,
       ticketTypes,
       componentCategories,
+      customerCategories,
+      closureTypes,
       partnersByRsh: partnerHierarchy.byRsh,
       partnersByAsh: partnerHierarchy.byAsh,
     });

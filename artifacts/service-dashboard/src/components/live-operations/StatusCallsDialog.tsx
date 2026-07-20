@@ -24,29 +24,26 @@ import {
   type AnalyticsQuery,
   type StatusCallRow,
 } from "@/lib/analytics-api";
-import { formatTicketDate } from "@/lib/utils";
 
 function downloadCsv(status: "WIP" | "MRF", rows: StatusCallRow[]) {
   const columns: Array<[keyof StatusCallRow, string]> = [
-    ["ticketId", "Ticket ID"],
+    ["ticketId", "Ticket Number"],
+    ["customer", "Customer Name"],
+    ["address", "Address"],
+    ["city", "City"],
+    ["product", "Product"],
+    ["lastAction", "Last Update"],
+    ["components", "Part Name"],
+    ["ageDays", "Age"],
+    ["reOpenTicket", "Reopen"],
+    ["repeatTicket", "Repeat"],
+    ["reason", "Why Pending"],
     ["ticketStatus", "Uploaded Status"],
-    ["reason", "Recorded Reason"],
     ["wipSubStage", "WIP Sub Stage / Comments"],
-    ["lastAction", "Last Action"],
     ["servicePartner", "Service Partner"],
     ["reportingManager", "Reporting Manager"],
     ["rsh", "RSH"],
-    ["product", "Product"],
     ["mrfApproval", "MRF Approval"],
-    ["mrfStatus", "MRF Status"],
-    ["mrfComponents", "MRF Components"],
-    ["mrfApprovedBy", "MRF Approved By"],
-    ["mrfApprovedDate", "MRF Approved Date"],
-    ["mrfDispatchDate", "MRF Dispatch Date"],
-    ["customer", "Customer"],
-    ["city", "City"],
-    ["state", "State"],
-    ["ageDays", "Age Days"],
     ["createdOn", "Created On"],
   ];
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -155,49 +152,33 @@ export function StatusCallsDialog({
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-white">
                 <TableRow>
-                  <TableHead>Ticket ID</TableHead>
+                  <TableHead className="whitespace-nowrap">Ticket Number</TableHead>
+                  <TableHead className="min-w-[160px]">Customer Name</TableHead>
+                  <TableHead className="min-w-[140px]">Address</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead className="min-w-[120px]">Product</TableHead>
+                  <TableHead className="min-w-[200px]">Last Update</TableHead>
+                  <TableHead className="min-w-[140px]">Part Name</TableHead>
                   <TableHead>Age</TableHead>
-                  <TableHead className="min-w-[190px]">Why Pending</TableHead>
-                  <TableHead className="min-w-[300px]">Recorded WIP Stage / Comments</TableHead>
-                  <TableHead className="min-w-[180px]">Last Action</TableHead>
-                  <TableHead>Service Partner</TableHead>
-                  <TableHead>Reporting Manager</TableHead>
-                  <TableHead>RSH</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>MRF Approval</TableHead>
-                  <TableHead>Customer / Location</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead className="whitespace-nowrap">Reopen &amp; Repeat</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row, index) => (
                   <TableRow key={`${row.ticketId}-${index}`} className="align-top">
-                    <TableCell className="font-semibold">{row.ticketId}</TableCell>
+                    <TableCell className="whitespace-nowrap font-semibold">{row.ticketId}</TableCell>
+                    <TableCell className="min-w-[160px] text-xs font-medium">{row.customer}</TableCell>
+                    <TableCell className="max-w-[200px] whitespace-normal text-xs">{row.address}</TableCell>
+                    <TableCell className="text-xs">{row.city}</TableCell>
+                    <TableCell className="max-w-[160px] text-xs">{row.product}</TableCell>
+                    <TableCell className="max-w-[240px] whitespace-normal text-xs">{row.lastAction}</TableCell>
+                    <TableCell className="max-w-[160px] text-xs">{row.components}</TableCell>
                     <TableCell className={row.ageDays > 5 ? "font-semibold text-red-600" : "tabular-nums"}>
                       {row.ageDays}d
                     </TableCell>
-                    <TableCell className="text-xs font-medium">{row.reason}</TableCell>
-                    <TableCell className="max-w-[380px] whitespace-normal text-xs leading-relaxed text-slate-600">
-                      {row.wipSubStage}
-                    </TableCell>
-                    <TableCell className="max-w-[240px] whitespace-normal text-xs">{row.lastAction}</TableCell>
-                    <TableCell className="max-w-[170px] text-xs">{row.servicePartner}</TableCell>
-                    <TableCell className="max-w-[160px] text-xs">{row.reportingManager}</TableCell>
-                    <TableCell className="max-w-[130px] text-xs">{row.rsh}</TableCell>
-                    <TableCell className="max-w-[160px] text-xs">{row.product}</TableCell>
-                    <TableCell className="min-w-[180px] text-xs">
-                      <p className="font-medium">{row.mrfApproval}</p>
-                      <p className="text-muted-foreground">{row.mrfStatus}</p>
-                      {row.mrfComponents !== "—" && (
-                        <p className="mt-1 text-muted-foreground">{row.mrfComponents}</p>
-                      )}
-                    </TableCell>
-                    <TableCell className="min-w-[170px] text-xs">
-                      <p className="font-medium">{row.customer}</p>
-                      <p className="text-muted-foreground">{row.city}, {row.state}</p>
-                    </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
-                      {row.createdOn ? formatTicketDate(String(row.createdOn)) : "—"}
+                      <p>Reopen: {row.reOpenTicket}</p>
+                      <p className="text-muted-foreground">Repeat: {row.repeatTicket}</p>
                     </TableCell>
                   </TableRow>
                 ))}
