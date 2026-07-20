@@ -7,12 +7,22 @@ import {
   fetchPartnerHierarchyMaps,
   fetchResolvedHierarchyNames,
 } from "../lib/ticket-query";
-import { fetchReportingHierarchyDirectory } from "../lib/reporting-hierarchy";
+import {
+  getCachedFilterOptions,
+  getCachedHierarchyDirectory,
+  setCachedFilterOptions,
+} from "../lib/data-cache";
 
 const router: IRouter = Router();
 
 router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => {
   try {
+    const cached = getCachedFilterOptions<Record<string, unknown>>();
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     const [
       categories,
       products,
@@ -31,7 +41,7 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       fetchDistinctTicketValues("category"),
       fetchDistinctTicketValues("product"),
       fetchDistinctTicketValues("service_partner_name"),
-      fetchReportingHierarchyDirectory(),
+      getCachedHierarchyDirectory(),
       fetchDistinctTicketValues("state"),
       fetchDistinctTicketValues("ticket_territory"),
       fetchDistinctTicketValues("support_type"),
@@ -52,7 +62,7 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       ...new Set(mrfRows.map((row) => componentCategory(row.component_name))),
     ].sort((a, b) => a.localeCompare(b));
 
-    res.json({
+    const payload = {
       categories,
       products,
       servicePartners: partners,
@@ -68,7 +78,9 @@ router.get("/filters/options", requireAuth, async (_req, res): Promise<void> => 
       closureTypes,
       partnersByRsh: partnerHierarchy.byRsh,
       partnersByAsh: partnerHierarchy.byAsh,
-    });
+    };
+    setCachedFilterOptions(payload);
+    res.json(payload);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load filter options" });

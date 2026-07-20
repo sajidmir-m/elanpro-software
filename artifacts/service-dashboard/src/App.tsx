@@ -28,6 +28,9 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Ticket data only changes on Excel upload — keep pages snappy when navigating.
+      staleTime: 2 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
     },
   },
 });

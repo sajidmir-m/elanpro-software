@@ -48,7 +48,7 @@ const FIELD_LABELS: Partial<Record<FilterField, string>> = {
   callAgeRange: "Call Age",
 };
 
-const AUTO_REFRESH_MS = 60_000;
+const AUTO_REFRESH_MS = 180_000;
 
 function toAnalyticsQuery(filters: FilterBarState): AnalyticsQuery {
   return {
@@ -125,6 +125,7 @@ export default function ActiveTickets() {
     queryKey: ["live-operations", analyticsQuery],
     queryFn: () => fetchLiveOperationsDashboard(analyticsQuery),
     placeholderData: keepPreviousData,
+    staleTime: 90_000,
     refetchInterval: autoRefresh ? AUTO_REFRESH_MS : false,
   });
 

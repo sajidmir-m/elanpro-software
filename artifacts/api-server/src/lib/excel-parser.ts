@@ -1,6 +1,7 @@
 import xlsx from "xlsx";
 import { getServiceClient, keysToSnake } from "@workspace/supabase";
 import { logger } from "./logger";
+import { invalidateDataCache, type CachedTable } from "./data-cache";
 
 type DataTable = "active_tickets" | "closed_tickets" | "mrf_data" | "sales_data";
 
@@ -258,6 +259,19 @@ export async function processExcelUpload(
       .from("uploads")
       .update({ status: "completed", record_count: rows.length, error_message: null })
       .eq("id", uploadId);
+
+    // Drop in-memory snapshots so the next dashboard request reloads fresh rows.
+    const touched: CachedTable[] =
+      fileType === "active_tickets"
+        ? ["active_tickets"]
+        : fileType === "closed_tickets"
+          ? ["closed_tickets", "active_tickets"]
+          : fileType === "mrf_data"
+            ? ["mrf_data"]
+            : fileType === "sales_data"
+              ? ["sales_data"]
+              : [];
+    invalidateDataCache(touched.length ? touched : undefined);
 
     return rows.length;
   } catch (err) {

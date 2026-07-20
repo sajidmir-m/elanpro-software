@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { 
   useListUploads, 
   useUploadData, 
   useDeleteUpload,
   getListUploadsQueryKey,
+  getGetDashboardSummaryQueryKey,
   UploadInputFileType
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,10 +18,30 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { UploadCloud, FileSpreadsheet, Trash2, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
+function invalidateDashboardData(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({}) });
+  void queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0];
+      return (
+        key === "live-operations" ||
+        key === "live-ops-drilldown" ||
+        key === "call-age-dashboard" ||
+        key === "closure-operations" ||
+        key === "closure-records" ||
+        key === "filter-options" ||
+        key === "records" ||
+        key === "status-calls"
+      );
+    },
+  });
+}
+
 export default function Uploads() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const seenStatuses = useRef<Map<number, string>>(new Map());
   
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<UploadInputFileType>("active_tickets");
@@ -32,6 +53,21 @@ export default function Uploads() {
       refetchInterval: 5000 // Poll every 5s for status updates
     }
   });
+
+  useEffect(() => {
+    if (!uploads) return;
+    for (const upload of uploads) {
+      const prev = seenStatuses.current.get(upload.id);
+      seenStatuses.current.set(upload.id, upload.status);
+      if (prev && prev !== "completed" && upload.status === "completed") {
+        invalidateDashboardData(queryClient);
+        toast({
+          title: "Data ready",
+          description: `${upload.filename} finished processing — dashboards will refresh.`,
+        });
+      }
+    }
+  }, [uploads, queryClient, toast]);
 
   const uploadMutation = useUploadData({
     mutation: {

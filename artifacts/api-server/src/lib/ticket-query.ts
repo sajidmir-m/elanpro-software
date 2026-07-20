@@ -1,13 +1,8 @@
 import { getServiceClient } from "@workspace/supabase";
 import { classifyWarranty, matchesSearch, matchesServicePartner, normalizeFilterParams, type FilterParams } from "./filters";
-import {
-  applySavedReportingHierarchy,
-  fetchReportingHierarchyDirectory,
-} from "./reporting-hierarchy";
+import { getCachedTableRows, type CachedTable } from "./data-cache";
 
 type TicketTable = "active_tickets" | "closed_tickets" | "mrf_data";
-
-const PAGE_SIZE = 1000;
 
 export function parseCreatedDate(createdOn: string | null | undefined): Date | null {
   if (!createdOn) return null;
@@ -150,43 +145,19 @@ function matchesFilters(row: Record<string, unknown>, params: FilterParams): boo
 
 async function fetchAllRows(
   table: TicketTable,
-  columns = "*",
+  _columns = "*",
   params: FilterParams = {},
 ): Promise<Record<string, unknown>[]> {
-  const supabase = getServiceClient();
-  const rows: Record<string, unknown>[] = [];
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from(table)
-      .select(columns)
-      .range(offset, offset + PAGE_SIZE - 1);
-
-    if (error) throw error;
-    if (!data?.length) break;
-
-    rows.push(...(data as unknown as Record<string, unknown>[]));
-    if (data.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
-
-  const directory = await fetchReportingHierarchyDirectory();
-  return rows
-    .map((row) => applySavedReportingHierarchy(row, directory))
-    .filter((row) => matchesFilters(row, params));
+  const rows = await getCachedTableRows(table as CachedTable);
+  return rows.filter((row) => matchesFilters(row, params));
 }
 
 export async function countRows(table: TicketTable, params: FilterParams = {}): Promise<number> {
   const hasFilters = Object.values(params).some((value) => value != null && value !== "");
   if (!hasFilters) {
-    const { count, error } = await getServiceClient()
-      .from(table)
-      .select("*", { count: "exact", head: true });
-    if (error) throw error;
-    return count ?? 0;
+    return (await getCachedTableRows(table as CachedTable)).length;
   }
-  const rows = await fetchAllRows(table, "created_on,category,product,service_partner_name,ash,rsh,state", params);
+  const rows = await fetchAllRows(table, "*", params);
   return rows.length;
 }
 
@@ -240,28 +211,13 @@ export async function fetchDistinctTicketValues(
     | "closure_type",
   tables: readonly ("active_tickets" | "closed_tickets")[] = ["active_tickets", "closed_tickets"],
 ): Promise<string[]> {
-  const supabase = getServiceClient();
   const values = new Set<string>();
 
   for (const table of tables) {
-    let offset = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from(table)
-        .select(field)
-        .not(field, "is", null)
-        .range(offset, offset + PAGE_SIZE - 1);
-
-      if (error) throw error;
-      if (!data?.length) break;
-
-      for (const row of data as unknown as Record<string, unknown>[]) {
-        const value = row[field];
-        if (typeof value === "string" && value.trim()) values.add(value);
-      }
-
-      if (data.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+    const rows = await getCachedTableRows(table);
+    for (const row of rows) {
+      const value = row[field];
+      if (typeof value === "string" && value.trim()) values.add(value);
     }
   }
 
@@ -273,40 +229,24 @@ export async function fetchPartnerHierarchyMaps(): Promise<{
   byRsh: Record<string, string[]>;
   byAsh: Record<string, string[]>;
 }> {
-  const supabase = getServiceClient();
-  const directory = await fetchReportingHierarchyDirectory();
   const byRsh = new Map<string, Set<string>>();
   const byAsh = new Map<string, Set<string>>();
-  let offset = 0;
+  const rows = await getCachedTableRows("active_tickets");
 
-  while (true) {
-    const { data, error } = await supabase
-      .from("active_tickets")
-      .select("service_partner_name,rsh")
-      .range(offset, offset + PAGE_SIZE - 1);
+  for (const row of rows) {
+    const rsh = String(row.rsh ?? "").trim();
+    const ash = String(row.ash ?? "").trim();
+    const partner = String(row.service_partner_name ?? "").trim();
+    if (!partner) continue;
 
-    if (error) throw error;
-    if (!data?.length) break;
-
-    for (const rawRow of data as unknown as Record<string, unknown>[]) {
-      const row = applySavedReportingHierarchy(rawRow, directory);
-      const rsh = String(row.rsh ?? "").trim();
-      const ash = String(row.ash ?? "").trim();
-      const partner = String(row.service_partner_name ?? "").trim();
-      if (!partner) continue;
-
-      if (rsh && rsh !== "Unassigned") {
-        if (!byRsh.has(rsh)) byRsh.set(rsh, new Set());
-        byRsh.get(rsh)!.add(partner);
-      }
-      if (ash && ash !== "Unmapped") {
-        if (!byAsh.has(ash)) byAsh.set(ash, new Set());
-        byAsh.get(ash)!.add(partner);
-      }
+    if (rsh && rsh !== "Unassigned") {
+      if (!byRsh.has(rsh)) byRsh.set(rsh, new Set());
+      byRsh.get(rsh)!.add(partner);
     }
-
-    if (data.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
+    if (ash && ash !== "Unmapped") {
+      if (!byAsh.has(ash)) byAsh.set(ash, new Set());
+      byAsh.get(ash)!.add(partner);
+    }
   }
 
   const serialize = (map: Map<string, Set<string>>): Record<string, string[]> => {
@@ -333,31 +273,16 @@ export async function fetchResolvedHierarchyNames(): Promise<{
   ashList: string[];
   rshList: string[];
 }> {
-  const supabase = getServiceClient();
-  const directory = await fetchReportingHierarchyDirectory();
   const ashSet = new Set<string>();
   const rshSet = new Set<string>();
 
   for (const table of ["active_tickets", "closed_tickets"] as const) {
-    let offset = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from(table)
-        .select("ash,rsh")
-        .range(offset, offset + PAGE_SIZE - 1);
-      if (error) throw error;
-      if (!data?.length) break;
-
-      for (const rawRow of data as unknown as Record<string, unknown>[]) {
-        const row = applySavedReportingHierarchy(rawRow, directory);
-        const ash = String(row.ash ?? "").trim();
-        const rsh = String(row.rsh ?? "").trim();
-        if (ash && ash !== "Unmapped") ashSet.add(ash);
-        if (rsh && rsh !== "Unassigned") rshSet.add(rsh);
-      }
-
-      if (data.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+    const rows = await getCachedTableRows(table);
+    for (const row of rows) {
+      const ash = String(row.ash ?? "").trim();
+      const rsh = String(row.rsh ?? "").trim();
+      if (ash && ash !== "Unmapped") ashSet.add(ash);
+      if (rsh && rsh !== "Unassigned") rshSet.add(rsh);
     }
   }
 

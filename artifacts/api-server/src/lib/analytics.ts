@@ -1,12 +1,7 @@
-import { getServiceClient } from "@workspace/supabase";
 import { matchesServicePartner, normalizeFilterParams, type FilterParams } from "./filters";
 import { attachTicketAges, rowAgeDays, formatDataAsOf, dataAsOfFromRows } from "./ticket-query";
-import {
-  applySavedReportingHierarchy,
-  fetchReportingHierarchyDirectory,
-} from "./reporting-hierarchy";
+import { getCachedEnrichedTickets, getCachedTableRows } from "./data-cache";
 
-const PAGE_SIZE = 1000;
 export const CHART_COLORS = [
   "hsl(215 60% 45%)",
   "hsl(38 92% 50%)",
@@ -204,110 +199,8 @@ function matchesAnalyticsFilters(row: Record<string, unknown>, params: Analytics
   return true;
 }
 
-async function fetchAll(
-  table: "active_tickets" | "closed_tickets" | "mrf_data" | "sales_data",
-  columns = "*",
-): Promise<Record<string, unknown>[]> {
-  const supabase = getServiceClient();
-  const rows: Record<string, unknown>[] = [];
-  let offset = 0;
-  while (true) {
-    const { data, error } = await supabase.from(table).select(columns).range(offset, offset + PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data?.length) break;
-    rows.push(...(data as unknown as Record<string, unknown>[]));
-    if (data.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
-  if (table === "sales_data") return rows;
-
-  const directory = await fetchReportingHierarchyDirectory();
-  return rows.map((row) => applySavedReportingHierarchy(row, directory));
-}
-
-async function attachMrfApproval(
-  ticketRows: Record<string, unknown>[],
-): Promise<Record<string, unknown>[]> {
-  if (ticketRows.length === 0) return ticketRows;
-  const mrfRows = await fetchAll("mrf_data");
-  const byTicket = new Map<
-    string,
-    {
-      count: number;
-      statuses: Set<string>;
-      components: Set<string>;
-      approvedBy: Set<string>;
-      approvedDates: Set<string>;
-      dispatchDates: Set<string>;
-      hasApproval: boolean;
-      hasRejection: boolean;
-    }
-  >();
-
-  for (const row of mrfRows) {
-    const ticketId = String(row.ticket_id ?? "").trim().toLowerCase();
-    if (!ticketId) continue;
-    const current = byTicket.get(ticketId) ?? {
-      count: 0,
-      statuses: new Set<string>(),
-      components: new Set<string>(),
-      approvedBy: new Set<string>(),
-      approvedDates: new Set<string>(),
-      dispatchDates: new Set<string>(),
-      hasApproval: false,
-      hasRejection: false,
-    };
-    current.count += 1;
-
-    const status = String(row.mrf_status ?? "").trim();
-    const approvedBy = String(row.approved_by ?? "").trim();
-    const approvedDate = String(row.approved_date ?? row.ash_approved_date ?? "").trim();
-    const dispatchDate = String(row.dispatch_date ?? "").trim();
-    const component = String(row.component_name ?? "").trim();
-    if (status) current.statuses.add(status);
-    if (component) current.components.add(component);
-    if (approvedBy) current.approvedBy.add(approvedBy);
-    if (approvedDate) current.approvedDates.add(approvedDate);
-    if (dispatchDate) current.dispatchDates.add(dispatchDate);
-    const normalizedStatus = status.toLowerCase();
-    if (approvedBy || approvedDate || normalizedStatus.includes("approv")) current.hasApproval = true;
-    if (normalizedStatus.includes("reject") || normalizedStatus.includes("declin")) {
-      current.hasRejection = true;
-    }
-    byTicket.set(ticketId, current);
-  }
-
-  return ticketRows.map((row) => {
-    const ticketId = String(row.ticket_id ?? "").trim().toLowerCase();
-    const mrf = byTicket.get(ticketId);
-    if (!mrf) {
-      return {
-        ...row,
-        mrf_record_count: 0,
-        mrf_approval: "No MRF",
-        mrf_status: null,
-        mrf_components: null,
-        mrf_approved_by: null,
-        mrf_approved_date: null,
-        mrf_dispatch_date: null,
-      };
-    }
-
-    return {
-      ...row,
-      mrf_record_count: mrf.count,
-      mrf_approval: mrf.hasApproval ? "Approved" : mrf.hasRejection ? "Rejected" : "Pending",
-      mrf_status: [...mrf.statuses].join(", ") || "Pending",
-      mrf_components: [...mrf.components].join(", ") || null,
-      mrf_approved_by: [...mrf.approvedBy].join(", ") || null,
-      mrf_approved_date: [...mrf.approvedDates].join(", ") || null,
-      mrf_dispatch_date: [...mrf.dispatchDates].join(", ") || null,
-    };
-  });
-}
-
 export async function fetchActive(params: AnalyticsParams = {}) {
-  const all = await attachMrfApproval(await fetchAll("active_tickets"));
+  const all = await getCachedEnrichedTickets("active_tickets");
   // Age against the full extract (max Created On), then filter — so Green/Orange/Red
   // stay stable when RSH/ASH/product filters are applied.
   attachTicketAges(all);
@@ -322,7 +215,7 @@ export async function fetchClosed(params: AnalyticsParams = {}) {
     dateTo: null,
     dateRangeDays: null,
   };
-  return (await attachMrfApproval(await fetchAll("closed_tickets"))).filter((row) => {
+  return (await getCachedEnrichedTickets("closed_tickets")).filter((row) => {
     if (!matchesAnalyticsFilters(row, nonDateParams)) return false;
     if (!normalized.dateFrom && !normalized.dateTo) return true;
     const closed = parseDate(row.closed_date);
@@ -342,11 +235,11 @@ export async function fetchClosed(params: AnalyticsParams = {}) {
 }
 
 export async function fetchMrf(params: AnalyticsParams = {}) {
-  return (await fetchAll("mrf_data")).filter((r) => matchesAnalyticsFilters(r, params));
+  return (await getCachedTableRows("mrf_data")).filter((r) => matchesAnalyticsFilters(r, params));
 }
 
 export async function fetchSales(params: AnalyticsParams = {}) {
-  return (await fetchAll("sales_data")).filter((r) => {
+  return (await getCachedTableRows("sales_data")).filter((r) => {
     if (params.category && String(r.category ?? "").toLowerCase() !== params.category.toLowerCase()) return false;
     if (params.product && String(r.product ?? "").toLowerCase() !== params.product.toLowerCase()) return false;
     if (params.state && String(r.state ?? "").toLowerCase() !== params.state.toLowerCase()) return false;
