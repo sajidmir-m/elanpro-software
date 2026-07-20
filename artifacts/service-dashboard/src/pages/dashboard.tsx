@@ -5,6 +5,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pi
 import { Clock, CheckCircle2, Ticket, BoxSelect, AlertCircle, ShieldAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { CHART_PALETTE } from "@/components/analytics/types";
 
 export default function Dashboard() {
   const { data: summary, isLoading, error } = useGetDashboardSummary({}, { 
@@ -126,7 +127,11 @@ export default function Dashboard() {
                     cursor={{ fill: 'var(--elevate-1)' }}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {summary.byCustomerCategory.map((_, index) => (
+                      <Cell key={`cust-cat-${index}`} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -195,7 +200,11 @@ export default function Dashboard() {
                     cursor={{ fill: 'var(--elevate-1)' }}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                    {summary.byCategory.slice(0, 8).map((_, index) => (
+                      <Cell key={`cat-${index}`} fill={CHART_PALETTE[index % CHART_PALETTE.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
