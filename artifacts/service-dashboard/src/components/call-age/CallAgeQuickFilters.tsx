@@ -17,9 +17,9 @@ const QUICK_FILTERS: QuickFilter[] = [
   },
   {
     id: "assigned",
-    label: "Only Assigned",
-    patch: { ticketStatus: "Assigned" },
-    isActive: (f) => f.ticketStatus === "Assigned",
+    label: "Only ASSIGNED",
+    patch: { ticketStatus: "ASSIGNED" },
+    isActive: (f) => f.ticketStatus === "ASSIGNED",
   },
   {
     id: "older30",

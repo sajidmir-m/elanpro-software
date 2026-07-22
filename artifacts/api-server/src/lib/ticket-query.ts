@@ -204,6 +204,7 @@ export async function fetchDistinctTicketValues(
     | "rsh"
     | "state"
     | "support_type"
+    | "ticket_status"
     | "ticket_type"
     | "ticket_territory"
     | "customer_category"

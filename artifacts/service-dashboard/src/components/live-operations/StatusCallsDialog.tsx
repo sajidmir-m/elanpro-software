@@ -25,7 +25,7 @@ import {
   type StatusCallRow,
 } from "@/lib/analytics-api";
 
-function downloadCsv(status: "WIP" | "MRF", rows: StatusCallRow[]) {
+function downloadCsv(status: string, rows: StatusCallRow[]) {
   const columns: Array<[keyof StatusCallRow, string]> = [
     ["ticketId", "Ticket Number"],
     ["customer", "Customer Name"],
@@ -37,7 +37,7 @@ function downloadCsv(status: "WIP" | "MRF", rows: StatusCallRow[]) {
     ["ageDays", "Age"],
     ["reOpenTicket", "Reopen"],
     ["repeatTicket", "Repeat"],
-    ["reason", "Why Pending"],
+    ["reason", "Reason / Last Action"],
     ["ticketStatus", "Uploaded Status"],
     ["wipSubStage", "WIP Sub Stage / Comments"],
     ["servicePartner", "Service Partner"],
@@ -55,7 +55,8 @@ function downloadCsv(status: "WIP" | "MRF", rows: StatusCallRow[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${status.toLowerCase()}-calls-${new Date().toISOString().slice(0, 10)}.csv`;
+  const safeStatus = status.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  anchor.download = `${safeStatus || "status"}-calls-${new Date().toISOString().slice(0, 10)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -67,7 +68,7 @@ export function StatusCallsDialog({
   onOpenChange,
 }: {
   open: boolean;
-  status: "WIP" | "MRF" | null;
+  status: string | null;
   filters: AnalyticsQuery;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -87,7 +88,7 @@ export function StatusCallsDialog({
     );
   }, [data?.rows, search]);
 
-  const title = status === "MRF" ? "MRF / Parts-Pending Calls" : "Work in Progress Calls";
+  const title = status ? `${status} Calls` : "Status Calls";
 
   return (
     <Dialog
@@ -103,7 +104,7 @@ export function StatusCallsDialog({
             <div>
               <DialogTitle>{title}</DialogTitle>
               <DialogDescription className="mt-1">
-                Every call matching the current Live Operations filters, with the exact recorded reason and status details.
+                Every call matching the current filters for this exact uploaded status value.
               </DialogDescription>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -146,7 +147,7 @@ export function StatusCallsDialog({
             </p>
           ) : rows.length === 0 ? (
             <p className="p-10 text-center text-sm text-muted-foreground">
-              No {status} calls match the current filters.
+              No calls match this uploaded status in the current filters.
             </p>
           ) : (
             <Table>

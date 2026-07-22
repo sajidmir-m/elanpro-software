@@ -88,6 +88,7 @@ export function WipMrfReasonsCard({ reasons }: { reasons: Reasons }) {
       <div className="px-0.5">
         <h2 className="text-[15px] font-semibold text-[#111827]">Why calls are pending</h2>
         <p className="text-[12px] text-[#667085]">
+          This section is a derived operational view for uploaded `WIP` and `MRF` rows.
           Reasons come from WIP Sub Stage, comments, last action, and component information.
           Critical means an open call is older than 5 days; it is not the uploaded priority.
         </p>

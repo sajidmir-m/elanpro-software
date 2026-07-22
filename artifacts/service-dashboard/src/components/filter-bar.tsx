@@ -99,14 +99,6 @@ const WARRANTY_OPTIONS = [
   { label: "Out of Warranty", value: "out" },
 ];
 
-const STATUS_OPTIONS = [
-  { label: "All Status", value: "all" },
-  { label: "Assigned", value: "Assigned" },
-  { label: "WIP", value: "WIP" },
-  { label: "MRF", value: "MRF" },
-  { label: "Other", value: "Other" },
-];
-
 const DEFAULT_FIELD_LABELS: Record<FilterField, string> = {
   search: "Search",
   nationalHead: "National Head",
@@ -389,21 +381,12 @@ export function FilterBar({
         )}
 
         {show("ticketStatus") && (
-          <Select
-            value={filters.ticketStatus || "all"}
-            onValueChange={(v) => set({ ticketStatus: v === "all" ? null : v })}
-          >
-            <SelectTrigger className="h-9 w-[140px] text-xs">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FilterSelect
+            value={filters.ticketStatus}
+            placeholder="All Status"
+            options={options?.ticketStatuses ?? []}
+            onChange={(v) => set({ ticketStatus: v })}
+          />
         )}
 
         {show("dateRangeDays") && (

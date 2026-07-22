@@ -56,9 +56,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ),
       ),
       pendingByAge,
-      byState: groupCount(activeRows, "state", "Unknown", 100),
-      byCategory: groupCount(activeRows, "category", "Unknown", 10),
-      byCustomerCategory: groupCount(activeRows, "customer_category", "Unknown", 50),
+      byState: groupCount(activeRows, "state", "", 100),
+      byCategory: groupCount(activeRows, "category", "", 10),
+      byCustomerCategory: groupCount(activeRows, "customer_category", "", 50),
       recentUploads: recentUploads.map((upload) => ({
         id: upload.id,
         filename: upload.filename,
@@ -92,9 +92,9 @@ router.get("/dashboard/active-tickets", requireAuth, async (req, res): Promise<v
         product: row.product,
         category: row.category,
         servicePartner: row.service_partner_name,
-        ash: row.ash ?? "N/A",
-        rsh: row.rsh ?? "N/A",
-        state: row.state ?? "Unknown",
+        ash: row.ash ?? null,
+        rsh: row.rsh ?? null,
+        state: row.state ?? null,
         status: row.ticket_status,
         wipSubStage: row.wip_sub_stage,
         ticketType: row.ticket_type,
@@ -105,8 +105,8 @@ router.get("/dashboard/active-tickets", requireAuth, async (req, res): Promise<v
       total: rows.length,
       byProduct: groupCount(rows, "product"),
       byServicePartner: groupCount(rows, "service_partner_name"),
-      byAsh: groupCount(rows, "ash", "N/A"),
-      byRsh: groupCount(rows, "rsh", "N/A"),
+      byAsh: groupCount(rows, "ash", ""),
+      byRsh: groupCount(rows, "rsh", ""),
       byAgeBucket: buildAgeBuckets(rows),
     });
   } catch (err) {
@@ -132,9 +132,9 @@ router.get("/dashboard/closed-tickets", requireAuth, async (req, res): Promise<v
         product: row.product,
         category: row.category,
         servicePartner: row.service_partner_name,
-        ash: row.ash ?? "N/A",
-        rsh: row.rsh ?? "N/A",
-        state: row.state ?? "Unknown",
+        ash: row.ash ?? null,
+        rsh: row.rsh ?? null,
+        state: row.state ?? null,
         closedDate: row.closed_date,
         tatMinutes: row.tat_minutes != null ? Number(row.tat_minutes) : null,
         supportType: row.support_type,
@@ -147,8 +147,8 @@ router.get("/dashboard/closed-tickets", requireAuth, async (req, res): Promise<v
         rows.map((row) => (row.tat_minutes != null ? Number(row.tat_minutes) : null)),
       ),
       byServicePartner: groupCountWithAvg(rows, "service_partner_name"),
-      byAsh: groupCountWithAvg(rows, "ash", "N/A"),
-      byRsh: groupCountWithAvg(rows, "rsh", "N/A"),
+      byAsh: groupCountWithAvg(rows, "ash", ""),
+      byRsh: groupCountWithAvg(rows, "rsh", ""),
       byState: groupCountWithAvg(rows, "state"),
       byTicketType: groupCountWithAvg(rows, "ticket_type"),
     });
@@ -177,11 +177,7 @@ function buildAgeBuckets(rows: Record<string, unknown>[]) {
   return [...buckets.entries()].map(([label, count]) => ({ label, count }));
 }
 
-function groupCountWithAvg(
-  rows: Record<string, unknown>[],
-  field: string,
-  fallback = "Unknown",
-) {
+function groupCountWithAvg(rows: Record<string, unknown>[], field: string, fallback = "") {
   const groups = new Map<string, Record<string, unknown>[]>();
   for (const row of rows) {
     const label = String(row[field] ?? fallback) || fallback;

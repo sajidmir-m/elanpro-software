@@ -17,6 +17,7 @@ import {
   ageBreakdown,
   ageUrgency,
   bucketStatus,
+  rawTicketStatus,
   groupAgeByRegion,
   groupAgeByField,
   resolveRegion,
@@ -62,9 +63,9 @@ router.get("/analytics/closure-operations", requireAuth, async (req, res): Promi
 
 router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<void> => {
   try {
-    const requestedStatus = String(req.query.status ?? "").toUpperCase();
-    if (requestedStatus !== "WIP" && requestedStatus !== "MRF") {
-      res.status(400).json({ message: "status must be WIP or MRF" });
+    const requestedStatus = String(req.query.status ?? "").trim();
+    if (!requestedStatus) {
+      res.status(400).json({ message: "status query param is required" });
       return;
     }
 
@@ -72,12 +73,18 @@ router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<voi
     const active = await fetchActive(params);
     attachTicketAges(active);
     const rows = active
-      .filter((row) => bucketStatus(row) === requestedStatus)
+      .filter((row) => rawTicketStatus(row).toLowerCase() === requestedStatus.toLowerCase())
       .map((row) => ({
         ticketId: String(row.ticket_id ?? "—"),
         ticketStatus: String(row.ticket_status ?? "—"),
-        classification: requestedStatus,
-        reason: operationalReasonForRow(row, requestedStatus),
+        classification:
+          requestedStatus.toUpperCase() === "WIP" || requestedStatus.toUpperCase() === "MRF"
+            ? requestedStatus.toUpperCase()
+            : null,
+        reason:
+          requestedStatus.toUpperCase() === "WIP" || requestedStatus.toUpperCase() === "MRF"
+            ? operationalReasonForRow(row, requestedStatus.toUpperCase() as "WIP" | "MRF")
+            : String(row.last_action ?? row.wip_sub_stage ?? row.ticket_status ?? "—"),
         wipSubStage: String(row.wip_sub_stage ?? "—"),
         lastAction: String(row.last_action ?? "—"),
         servicePartner: String(row.service_partner_name ?? "—"),

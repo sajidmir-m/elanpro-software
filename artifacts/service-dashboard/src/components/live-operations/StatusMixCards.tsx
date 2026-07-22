@@ -2,10 +2,10 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 
 type StatusSummary = {
-  assigned: number;
-  wip: number;
-  mrf: number;
-  other: number;
+  label: string;
+  count: number;
+  pct?: number;
+  color: string;
 };
 
 function scaleSpark(base: number[], share: number): number[] {
@@ -14,50 +14,24 @@ function scaleSpark(base: number[], share: number): number[] {
 }
 
 export function StatusMixCards({
-  status,
+  statuses,
   sparkline = [],
   onSelectStatus,
 }: {
-  status: StatusSummary;
+  statuses: StatusSummary[];
   sparkline?: number[];
   onSelectStatus?: (status: string) => void;
 }) {
-  const total = status.assigned + status.wip + status.mrf + status.other || 1;
-
-  const cards = [
-    {
-      key: "Assigned",
-      label: "Assigned",
-      count: status.assigned,
-      color: "#2563EB",
-      fill: "#EFF6FF",
-      spark: scaleSpark(sparkline, status.assigned / total),
-    },
-    {
-      key: "WIP",
-      label: "Work In Progress",
-      count: status.wip,
-      color: "#16A34A",
-      fill: "#ECFDF5",
-      spark: scaleSpark(sparkline, status.wip / total),
-    },
-    {
-      key: "MRF",
-      label: "MRF Pending",
-      count: status.mrf,
-      color: "#F59E0B",
-      fill: "#FFFBEB",
-      spark: scaleSpark(sparkline, status.mrf / total),
-    },
-    {
-      key: "Other",
-      label: "Other",
-      count: status.other,
-      color: "#64748B",
-      fill: "#F8FAFC",
-      spark: scaleSpark(sparkline, status.other / total),
-    },
-  ];
+  const total = statuses.reduce((sum, item) => sum + item.count, 0) || 1;
+  const cards = statuses.map((item) => ({
+    key: item.label,
+    label: item.label,
+    count: item.count,
+    pct: item.pct ?? Math.round((item.count / total) * 100),
+    color: item.color,
+    fill: `${item.color}14`,
+    spark: scaleSpark(sparkline, item.count / total),
+  }));
 
   return (
     <section className="space-y-2">
@@ -65,13 +39,12 @@ export function StatusMixCards({
         <div>
           <h2 className="text-[15px] font-semibold text-[#111827]">Ticket Status</h2>
           <p className="text-[13px] text-[#667085]">
-            Status mix · {total.toLocaleString()} open calls — click WIP or MRF to see every call and its reason
+            Exact uploaded status mix · {total.toLocaleString()} open calls
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
         {cards.map((card) => {
-          const pct = Math.round((card.count / total) * 100);
           const sparkData = card.spark.map((v, i) => ({ i, v }));
           return (
             <button
@@ -91,7 +64,7 @@ export function StatusMixCards({
                       <p className="mt-2 text-[32px] font-bold leading-none tabular-nums text-[#111827]">
                         {card.count.toLocaleString()}
                       </p>
-                      <p className="mt-1.5 text-[12px] tabular-nums text-[#667085]">{pct}% of open calls</p>
+                      <p className="mt-1.5 text-[12px] tabular-nums text-[#667085]">{card.pct}% of open calls</p>
                     </div>
                   </div>
                   <div className="mt-3 h-12">

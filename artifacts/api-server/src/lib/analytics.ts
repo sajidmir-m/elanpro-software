@@ -51,6 +51,10 @@ export function classifyWarranty(supportType: unknown): "in" | "out" | "other" {
   return "other";
 }
 
+export function rawTicketStatus(row: Record<string, unknown>): string {
+  return String(row.ticket_status ?? "").trim() || "Not recorded";
+}
+
 export function bucketStatus(row: Record<string, unknown>): "Assigned" | "WIP" | "MRF" | "Other" {
   const status = String(row.ticket_status ?? "")
     .toLowerCase()
@@ -138,7 +142,7 @@ function matchesAnalyticsFilters(row: Record<string, unknown>, params: Analytics
     if (area !== params.area.toLowerCase()) return false;
   }
   if (params.ticketStatus) {
-    if (bucketStatus(row).toLowerCase() !== params.ticketStatus.toLowerCase()) return false;
+    if (rawTicketStatus(row).toLowerCase() !== params.ticketStatus.toLowerCase()) return false;
   }
   if (params.callAgeRange && params.callAgeRange !== "all") {
     if (!matchesCallAgeRange(row, params.callAgeRange)) return false;
@@ -298,14 +302,14 @@ export function average(values: Array<number | null | undefined>): number | null
 }
 
 export function statusBreakdown(rows: Record<string, unknown>[]) {
-  const buckets = { Assigned: 0, WIP: 0, MRF: 0, Other: 0 };
-  for (const row of rows) buckets[bucketStatus(row)] += 1;
-  return [
-    { label: "Assigned", count: buckets.Assigned, color: CHART_COLORS[0] },
-    { label: "WIP", count: buckets.WIP, color: CHART_COLORS[1] },
-    { label: "MRF", count: buckets.MRF, color: CHART_COLORS[2] },
-    { label: "Other", count: buckets.Other, color: CHART_COLORS[3] },
-  ].filter((b) => b.count > 0);
+  const groups = new Map<string, number>();
+  for (const row of rows) {
+    const label = rawTicketStatus(row);
+    groups.set(label, (groups.get(label) ?? 0) + 1);
+  }
+  return [...groups.entries()]
+    .map(([label, count], index) => ({ label, count, color: CHART_COLORS[index % CHART_COLORS.length]! }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 export function resolveRegion(row: Record<string, unknown>): string {
@@ -1385,6 +1389,10 @@ export function summarizeLiveOperationsDashboard(
   const sparkline = dailyTrend.slice(-7).map((d) => d.count);
 
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const rawStatusBreakdown = statusBreakdown(activeRows).map((item) => ({
+    ...item,
+    pct: pct(item.count),
+  }));
 
   const workloadOverview = [
     { label: "Assigned", count: assigned, pct: pct(assigned), color: "#2563EB" },
@@ -1802,7 +1810,7 @@ export function summarizeLiveOperationsDashboard(
     ageingBuckets,
     longestAgeingTicket,
     warrantyBreakdown,
-    statusSummary: { assigned, wip, mrf, other },
+    rawStatusBreakdown,
     operationalReasons,
     topCities,
     categoryBreakdown,
@@ -1821,17 +1829,12 @@ export function summarizeLiveOperationsDashboard(
   const charts = {
     statusBreakdown: {
       title: "Open Calls by Status",
-      subtitle: "Distribution across operational stages",
-      segments: [
-        { label: "Assigned", count: assigned, color: "#2563EB" },
-        { label: "WIP", count: wip, color: "#F59E0B" },
-        { label: "MRF", count: mrf, color: "#DC2626" },
-        ...(other > 0 ? [{ label: "Other", count: other, color: "#94A3B8" }] : []),
-      ],
+      subtitle: "Exact status values from the uploaded sheet",
+      segments: rawStatusBreakdown.map(({ label, count, color }) => ({ label, count, color })),
       insight:
-        assigned >= wip
-          ? `Assigned calls (${assigned}) outpace in-progress work (${wip}).`
-          : `Work in progress (${wip}) is leading operational flow.`,
+        rawStatusBreakdown[0]
+          ? `${rawStatusBreakdown[0].label} is the largest uploaded status with ${rawStatusBreakdown[0].count} calls.`
+          : "No uploaded status values are available.",
     },
     topPartners: {
       title: "Top 10 Service Partners",
@@ -1973,11 +1976,7 @@ export function summarizeLiveOperationsDashboard(
     smartInsights,
     dataCoverage,
     // legacy fields kept for compatibility
-    workloadOverview: [
-      { label: "Assigned", count: assigned, pct: pct(assigned), color: "#64748B" },
-      { label: "WIP", count: wip, pct: pct(wip), color: "#64748B" },
-      { label: "MRF Pending", count: mrf, pct: pct(mrf), color: "#64748B" },
-    ],
+    workloadOverview: rawStatusBreakdown,
     reportingManagers,
     rshLeaderboard,
     productInsights,

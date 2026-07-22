@@ -67,20 +67,10 @@ export function applySavedReportingHierarchy(
   row: Record<string, unknown>,
   directory: ReportingHierarchyDirectory,
 ): Record<string, unknown> {
-  const uploadedReportingManager = String(row.rsh ?? "").trim();
-  const hierarchy = directory.byAshName.get(normalizedName(uploadedReportingManager));
-
-  // Fall back to the raw uploaded name (instead of a generic "Unmapped"
-  // bucket) so tickets whose Reporting Manager isn't yet registered in the
-  // admin directory still show up under their real name everywhere
-  // (lists, filters, click-through drilldowns) instead of disappearing
-  // into a shared placeholder that can't be filtered to consistently.
   return {
     ...row,
-    uploaded_reporting_manager: uploadedReportingManager || null,
+    uploaded_reporting_manager: row.rsh ?? null,
     representative: row.ash ?? null,
-    ash: hierarchy?.ash_name ?? (uploadedReportingManager || "Unmapped"),
-    rsh: hierarchy?.rsh_name ?? "Unassigned",
-    hierarchy_region: hierarchy?.region_code ?? null,
+    hierarchy_region: null,
   };
 }

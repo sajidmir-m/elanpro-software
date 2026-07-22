@@ -16,7 +16,7 @@ export type AnalyticsQuery = {
   level?: string | null;
   value?: string | null;
   ticketStatus?: string | null;
-  status?: "WIP" | "MRF" | null;
+  status?: string | null;
   view?: LiveOpsDrilldownView | null;
   callAgeRange?: string | null;
   componentCategory?: string | null;
@@ -55,7 +55,7 @@ export type RecordsResponse = {
 export type StatusCallRow = {
   ticketId: string;
   ticketStatus: string;
-  classification: "WIP" | "MRF";
+  classification: string | null;
   reason: string;
   wipSubStage: string;
   lastAction: string;
@@ -83,7 +83,7 @@ export type StatusCallRow = {
 };
 
 export type StatusCallsResponse = {
-  status: "WIP" | "MRF";
+  status: string;
   total: number;
   rows: StatusCallRow[];
 };
@@ -157,6 +157,7 @@ export type FilterOptions = {
   states: string[];
   regions: string[];
   warrantyTypes: string[];
+  ticketStatuses?: string[];
   ticketTypes: string[];
   nationalHeads?: string[];
   componentCategories: string[];
@@ -521,7 +522,7 @@ export type LiveOperationsDashboard = {
       region: string;
     } | null;
     warrantyBreakdown: Array<{ label: string; count: number; pct: number; color: string }>;
-    statusSummary?: { assigned: number; wip: number; mrf: number; other: number };
+    rawStatusBreakdown?: Array<{ label: string; count: number; pct: number; color: string }>;
     operationalReasons?: {
       wip: {
         total: number;
@@ -574,7 +575,7 @@ export async function fetchLiveOperationsDashboard(params: AnalyticsQuery) {
   return authFetch<LiveOperationsDashboard>(`/api/analytics/live-operations${toQuery(params)}`);
 }
 
-export async function fetchStatusCalls(status: "WIP" | "MRF", params: AnalyticsQuery) {
+export async function fetchStatusCalls(status: string, params: AnalyticsQuery) {
   return authFetch<StatusCallsResponse>(
     `/api/analytics/status-calls${toQuery({ ...params, ticketStatus: null, status })}`,
   );

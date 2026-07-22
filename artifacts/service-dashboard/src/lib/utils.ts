@@ -11,10 +11,10 @@ export function formatTicketDate(
   value: string | Date | null | undefined,
   pattern = 'dd MMM yyyy',
 ): string {
-  if (value == null || value === '') return '—';
+  if (value == null || value === '') return '';
 
   if (value instanceof Date) {
-    return isValid(value) ? format(value, pattern) : '—';
+    return isValid(value) ? format(value, pattern) : '';
   }
 
   const raw = String(value).trim();

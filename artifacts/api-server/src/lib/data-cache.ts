@@ -45,10 +45,7 @@ async function loadTableRows(table: CachedTable): Promise<Record<string, unknown
     offset += PAGE_SIZE;
   }
 
-  if (table === "sales_data") return rows;
-
-  const directory = await getCachedHierarchyDirectory();
-  return rows.map((row) => applySavedReportingHierarchy(row, directory));
+  return rows;
 }
 
 export async function getCachedHierarchyDirectory(): Promise<ReportingHierarchyDirectory> {
@@ -147,36 +144,7 @@ export function attachMrfToTickets(
   ticketRows: Record<string, unknown>[],
   mrfRows: Record<string, unknown>[],
 ): Record<string, unknown>[] {
-  if (ticketRows.length === 0) return ticketRows;
-  const byTicket = buildMrfByTicket(mrfRows);
-
-  return ticketRows.map((row) => {
-    const ticketId = String(row.ticket_id ?? "").trim().toLowerCase();
-    const mrf = byTicket.get(ticketId);
-    if (!mrf) {
-      return {
-        ...row,
-        mrf_record_count: 0,
-        mrf_approval: "No MRF",
-        mrf_status: null,
-        mrf_components: null,
-        mrf_approved_by: null,
-        mrf_approved_date: null,
-        mrf_dispatch_date: null,
-      };
-    }
-
-    return {
-      ...row,
-      mrf_record_count: mrf.count,
-      mrf_approval: mrf.hasApproval ? "Approved" : mrf.hasRejection ? "Rejected" : "Pending",
-      mrf_status: [...mrf.statuses].join(", ") || "Pending",
-      mrf_components: [...mrf.components].join(", ") || null,
-      mrf_approved_by: [...mrf.approvedBy].join(", ") || null,
-      mrf_approved_date: [...mrf.approvedDates].join(", ") || null,
-      mrf_dispatch_date: [...mrf.dispatchDates].join(", ") || null,
-    };
-  });
+  return ticketRows;
 }
 
 /** Active/closed rows with MRF fields, cached after first build. */
@@ -189,11 +157,8 @@ export async function getCachedEnrichedTickets(
   let promise = enrichedInflight.get(table);
   if (!promise) {
     promise = (async () => {
-      const [tickets, mrf] = await Promise.all([
-        getCachedTableRows(table),
-        getCachedTableRows("mrf_data"),
-      ]);
-      const enriched = attachMrfToTickets(tickets, mrf);
+      const tickets = await getCachedTableRows(table);
+      const enriched = attachMrfToTickets(tickets, []);
       enrichedCache.set(table, { rows: enriched, loadedAt: Date.now() });
       enrichedInflight.delete(table);
       return enriched;

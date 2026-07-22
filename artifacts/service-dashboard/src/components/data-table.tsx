@@ -29,10 +29,10 @@ interface DataTableProps {
 }
 
 function formatCell(value: unknown, type?: ColumnDef["type"]): ReactNode {
-  if (value == null || value === "") return "—";
+  if (value == null || value === "") return "";
   if (type === "green" || type === "orange" || type === "red") {
     const text = String(value ?? "");
-    if (!text || text === "0") return <span className="text-muted-foreground">—</span>;
+    if (!text || text === "0") return "";
     const styles = {
       green: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
       orange: "bg-amber-500/15 text-amber-700 border-amber-500/30",

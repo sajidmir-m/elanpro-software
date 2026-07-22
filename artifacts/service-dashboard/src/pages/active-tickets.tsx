@@ -112,7 +112,7 @@ export default function ActiveTickets() {
   const [filters, setFilters] = useState<FilterBarState>({ warranty: "all" });
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedPartner, setSelectedPartner] = useState<LiveOpsPartnerRow | null>(null);
-  const [detailStatus, setDetailStatus] = useState<"WIP" | "MRF" | null>(null);
+  const [detailStatus, setDetailStatus] = useState<string | null>(null);
   const [drilldown, setDrilldown] = useState<{
     view: LiveOpsDrilldownView;
     group?: string;
@@ -131,12 +131,7 @@ export default function ActiveTickets() {
 
   const busy = isLoading || (isFetching && !data);
 
-  const statusSummary = data?.opsOverview?.statusSummary ?? {
-    assigned: data?.kpis.assigned.value ?? 0,
-    wip: data?.kpis.wip.value ?? 0,
-    mrf: data?.kpis.mrf.value ?? 0,
-    other: 0,
-  };
+  const statusSummary = data?.opsOverview?.rawStatusBreakdown ?? data?.workloadOverview ?? [];
 
   return (
     <div className="min-h-full bg-[#F7F8FA]">
@@ -187,17 +182,10 @@ export default function ActiveTickets() {
             ) : (
               data && (
                 <StatusMixCards
-                  status={statusSummary}
+                  statuses={statusSummary}
                   sparkline={data.kpis.open.sparkline}
                   onSelectStatus={(ticketStatus) => {
-                    if (ticketStatus === "WIP" || ticketStatus === "MRF") {
-                      setDetailStatus(ticketStatus);
-                      return;
-                    }
-                    setFilters((current) => ({
-                      ...current,
-                      ticketStatus: current.ticketStatus === ticketStatus ? null : ticketStatus,
-                    }));
+                    setDetailStatus(ticketStatus);
                   }}
                 />
               )
