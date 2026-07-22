@@ -27,10 +27,63 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-function parseRows(buffer: Buffer): Record<string, unknown>[] {
+/**
+ * Pick the sheet that actually holds row-level extract data.
+ * Many exports put a pivot summary on Sheet1 and the real tickets on a later
+ * sheet (e.g. "tickets") — reading only SheetNames[0] ingested 38 pivot rows
+ * instead of 771 ticket rows.
+ */
+function scoreDataSheet(rows: Record<string, unknown>[], fileType: string): number {
+  if (!rows.length) return -1;
+  const keys = Object.keys(rows[0] ?? {});
+  const keySet = new Set(keys);
+  let score = rows.length;
+
+  const looksLikePivot =
+    keys.some((k) => /^count of/i.test(k)) ||
+    keys.some((k) => k === "__EMPTY" || k.startsWith("__EMPTY_")) ||
+    (keys.length <= 4 && !keySet.has("Ticket ID") && !keySet.has("Product"));
+  if (looksLikePivot) score -= 100_000;
+
+  if (fileType === "sales_data") {
+    if (keySet.has("Product")) score += 50_000;
+    if (keySet.has("Quantity") || keySet.has("Sales") || keySet.has("Sales Qty")) score += 10_000;
+  } else if (fileType === "mrf_data") {
+    if (keySet.has("Ticket ID") || keySet.has("MRF No.")) score += 50_000;
+  } else {
+    if (keySet.has("Ticket ID")) score += 50_000;
+    if (keySet.has("Ticket Status")) score += 10_000;
+  }
+
+  return score;
+}
+
+function parseRows(buffer: Buffer, fileType: string): Record<string, unknown>[] {
   const wb = xlsx.read(buffer, { type: "buffer", cellDates: true });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  return xlsx.utils.sheet_to_json(sheet, { defval: null, raw: false }) as Record<string, unknown>[];
+  let bestRows: Record<string, unknown>[] = [];
+  let bestScore = -1;
+  let bestName = wb.SheetNames[0] ?? "";
+
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    if (!sheet) continue;
+    const rows = xlsx.utils.sheet_to_json(sheet, { defval: null, raw: false }) as Record<
+      string,
+      unknown
+    >[];
+    const score = scoreDataSheet(rows, fileType);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRows = rows;
+      bestName = name;
+    }
+  }
+
+  if (wb.SheetNames.length > 1) {
+    logger.info({ fileType, sheet: bestName, rows: bestRows.length }, "Selected Excel data sheet");
+  }
+
+  return bestRows;
 }
 
 function mapSharedTicketFields(row: Record<string, unknown>, uploadId: number) {
@@ -216,7 +269,7 @@ export async function processExcelUpload(
   uploadId: number,
 ): Promise<number> {
   const supabase = getServiceClient();
-  const rows = parseRows(buffer);
+  const rows = parseRows(buffer, fileType);
 
   if (rows.length === 0) {
     await supabase
