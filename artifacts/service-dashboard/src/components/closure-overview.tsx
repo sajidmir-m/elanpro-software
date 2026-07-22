@@ -181,7 +181,7 @@ export function ClosureOverview({
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
         <Card className="rounded-xl border border-[#E7EAF0] bg-white shadow-sm">
           <CardContent className="p-4">
             <h3 className="text-[14px] font-semibold text-[#111827]">Closure Time Distribution</h3>
@@ -211,6 +211,12 @@ export function ClosureOverview({
           rows={data.closureTypes}
           color="#2563EB"
         />
+        <BreakdownPanel
+          title="Closure Remarks"
+          subtitle="Remark text recorded at closure (top values)"
+          rows={data.closureRemarks ?? []}
+          color="#0D9488"
+        />
       </section>
 
       {data.callTypeAgeMatrix && (
@@ -225,7 +231,7 @@ export function ClosureOverview({
         <HideableSection title="Customer Categories">
           <BreakdownPanel
             title="Customer Categories"
-            subtitle="Customer type—not product category"
+            subtitle="Customer category from the ticket extract—not product category"
             rows={data.customerCategories}
             color="#8B5CF6"
             onSelect={onSelectCustomerCategory}

@@ -18,6 +18,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { UploadCloud, FileSpreadsheet, Trash2, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
+function apiErrorMessage(err: unknown): string {
+  if (!err) return "Unknown error";
+  if (err instanceof Error && err.message) return err.message;
+  const e = err as { data?: { error?: string }; error?: string | { error?: string }; message?: string };
+  if (typeof e.data?.error === "string" && e.data.error) return e.data.error;
+  if (typeof e.error === "string" && e.error) return e.error;
+  if (typeof e.error === "object" && e.error?.error) return e.error.error;
+  if (typeof e.message === "string" && e.message) return e.message;
+  return "Unknown error";
+}
+
 function invalidateDashboardData(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({}) });
   void queryClient.invalidateQueries({
@@ -77,8 +88,8 @@ export default function Uploads() {
         setFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
       },
-      onError: (err: any) => {
-        toast({ title: "Upload failed", description: err.error?.error || "Unknown error", variant: "destructive" });
+      onError: (err: unknown) => {
+        toast({ title: "Upload failed", description: apiErrorMessage(err), variant: "destructive" });
       }
     }
   });
@@ -87,10 +98,11 @@ export default function Uploads() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListUploadsQueryKey() });
+        invalidateDashboardData(queryClient);
         toast({ title: "Upload record deleted" });
       },
-      onError: (err: any) => {
-        toast({ title: "Delete failed", description: err.error?.error || "Unknown error", variant: "destructive" });
+      onError: (err: unknown) => {
+        toast({ title: "Delete failed", description: apiErrorMessage(err), variant: "destructive" });
       }
     }
   });

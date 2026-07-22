@@ -12,14 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   fetchLiveOpsDrilldown,
   type AnalyticsQuery,
   type LiveOpsDrilldownRow,
@@ -216,58 +208,79 @@ export function LiveOpsDrilldownDialog({
               </div>
             </aside>
 
-            <section className="min-h-0 overflow-auto">
-              <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white px-4 py-2 text-xs text-slate-600">
+            <section className="flex min-h-0 flex-col overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between border-b bg-white px-4 py-2 text-xs text-slate-600">
                 <span>{selectedGroup ?? "All values"}</span>
                 <span>{visibleRows.length} matching calls</span>
               </div>
               {visibleRows.length === 0 ? (
                 <p className="p-10 text-center text-sm text-muted-foreground">No calls match this selection.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="sticky top-9 z-10 bg-white">
-                      <TableRow>
-                        <TableHead className="whitespace-nowrap">Ticket Number</TableHead>
-                        <TableHead className="min-w-[160px]">Customer Name</TableHead>
-                        <TableHead className="min-w-[140px]">Address</TableHead>
-                        <TableHead>City</TableHead>
-                        <TableHead className="min-w-[120px]">Product</TableHead>
-                        <TableHead className="min-w-[200px]">Last Update</TableHead>
-                        <TableHead className="min-w-[140px]">Part Name</TableHead>
-                        <TableHead>Age</TableHead>
-                        <TableHead className="whitespace-nowrap">Reopen &amp; Repeat</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                <div className="min-h-0 flex-1 overflow-auto">
+                  <table className="w-full min-w-[1100px] caption-bottom border-collapse text-sm">
+                    <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                      <tr className="border-b">
+                        <th className="h-10 whitespace-nowrap px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Ticket Number
+                        </th>
+                        <th className="h-10 min-w-[160px] px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Customer Name
+                        </th>
+                        <th className="h-10 min-w-[140px] px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Address
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          City
+                        </th>
+                        <th className="h-10 min-w-[120px] px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Product
+                        </th>
+                        <th className="h-10 min-w-[200px] px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Last Update
+                        </th>
+                        <th className="h-10 min-w-[140px] px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Part Name
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Age
+                        </th>
+                        <th className="h-10 whitespace-nowrap px-2 text-left align-middle text-xs font-medium text-muted-foreground">
+                          Reopen &amp; Repeat
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {visibleRows.map((row, index) => (
-                        <TableRow key={`${row.ticketId}-${index}`} className="align-top">
-                          <TableCell className="whitespace-nowrap font-semibold">{row.ticketId}</TableCell>
-                          <TableCell className="text-xs">
+                        <tr
+                          key={`${row.ticketId}-${index}`}
+                          className="border-b align-top transition-colors hover:bg-muted/50"
+                        >
+                          <td className="whitespace-nowrap p-2 font-semibold">{row.ticketId}</td>
+                          <td className="p-2 text-xs">
                             <p className="font-medium">{row.customer}</p>
                             <p className="text-muted-foreground">{row.customerCategory}</p>
-                          </TableCell>
-                          <TableCell className="max-w-[200px] whitespace-normal text-xs">{row.address}</TableCell>
-                          <TableCell className="text-xs">{row.city}</TableCell>
-                          <TableCell className="text-xs">{row.product}</TableCell>
-                          <TableCell className="max-w-[280px] whitespace-normal text-xs">
+                          </td>
+                          <td className="max-w-[200px] whitespace-normal p-2 text-xs">{row.address}</td>
+                          <td className="p-2 text-xs">{row.city}</td>
+                          <td className="p-2 text-xs">{row.product}</td>
+                          <td className="max-w-[280px] whitespace-normal p-2 text-xs">
                             <p>{row.lastAction}</p>
                             {row.wipSubStage && row.wipSubStage !== "—" ? (
                               <p className="mt-1 text-muted-foreground">WIP: {row.wipSubStage}</p>
                             ) : null}
-                          </TableCell>
-                          <TableCell className="max-w-[180px] whitespace-normal text-xs">{row.components}</TableCell>
-                          <TableCell className={row.ageDays > 5 ? "font-semibold text-red-600" : ""}>
+                          </td>
+                          <td className="max-w-[180px] whitespace-normal p-2 text-xs">{row.components}</td>
+                          <td className={`p-2 ${row.ageDays > 5 ? "font-semibold text-red-600" : ""}`}>
                             {row.ageDays}d
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs">
+                          </td>
+                          <td className="whitespace-nowrap p-2 text-xs">
                             <p>Reopen: {row.reOpenTicket}</p>
                             <p className="text-muted-foreground">Repeat: {row.repeatTicket}</p>
-                          </TableCell>
-                        </TableRow>
+                          </td>
+                        </tr>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>

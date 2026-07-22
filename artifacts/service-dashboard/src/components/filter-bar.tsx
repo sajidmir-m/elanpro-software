@@ -361,7 +361,7 @@ export function FilterBar({
         sticky ? "sticky top-0 z-30" : ""
       } ${className ?? ""}`}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
         {show("search") && (
           <SearchBox
             value={filters.search ?? ""}

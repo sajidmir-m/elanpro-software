@@ -141,7 +141,6 @@ export default function ClosedTickets() {
           fields={CLOSURE_FIELDS}
           fieldLabels={FIELD_LABELS}
           searchPlaceholder="Search closed ticket, customer, product, partner…"
-          sticky
           className="rounded-xl border border-[#E7EAF0] bg-white shadow-sm"
         />
 

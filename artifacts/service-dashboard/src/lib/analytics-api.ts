@@ -204,8 +204,8 @@ export type ClosureBreakdownRow = {
 };
 
 export type CallTypeAgeMatrix = {
-  /** Whether `groupLabel` on each row represents Customer Type or Customer Name. */
-  groupBy: "customerType" | "customerName";
+  /** Whether `groupLabel` on each row represents Customer Category or Customer Name. */
+  groupBy: "customerCategory" | "customerName" | "customerType";
   buckets: string[];
   rows: Array<{
     callType: string;
@@ -230,6 +230,8 @@ export type ClosureDashboard = {
   };
   tatBuckets: Array<{ label: string; count: number; color: string }>;
   closureTypes: ClosureBreakdownRow[];
+  /** Top closure remarks from the closed-ticket extract. */
+  closureRemarks: ClosureBreakdownRow[];
   products: ClosureBreakdownRow[];
   /** Full, uncapped product breakdown for the all-products pie/bar chart. */
   allProducts: ClosureBreakdownRow[];
@@ -249,6 +251,7 @@ export type ClosureDashboard = {
     customers: number;
     customerCategories: number;
     closureTypes: number;
+    closureRemarks: number;
     closedBy: number;
   };
 };

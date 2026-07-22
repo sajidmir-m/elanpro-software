@@ -1006,7 +1006,7 @@ function callTypeForRow(row: Record<string, unknown>): "Part Tickets" | "Non Par
 }
 
 /**
- * Call Type × Customer Type × Age-in-hours matrix, with count and percentage
+ * Call Type × Customer Category × Age-in-hours matrix, with count and percentage
  * per cell. When a Customer Name filter is active, this pivots to
  * Customer Name × Call Type instead, so the same table shows a per-customer
  * breakdown.
@@ -1019,7 +1019,7 @@ function buildCallTypeAgeMatrix(rows: Record<string, unknown>[], groupByCustomer
     const callType = callTypeForRow(row);
     const groupLabel = groupByCustomerName
       ? String(row.customer_name ?? "Not Recorded").trim() || "Not Recorded"
-      : String(row.customer_type ?? "Not Recorded").trim() || "Not Recorded";
+      : String(row.customer_category ?? "Not Recorded").trim() || "Not Recorded";
     const tatMinutes = closureTatMinutes(row);
     const hours = tatMinutes != null ? tatMinutes / 60 : null;
     const bucket = hours == null ? null : CALL_TYPE_AGE_BUCKETS.find((b) => hours >= b.min && hours <= b.max);
@@ -1054,7 +1054,7 @@ function buildCallTypeAgeMatrix(rows: Record<string, unknown>[], groupByCustomer
   matrixRows.sort((a, b) => a.callType.localeCompare(b.callType) || b.total - a.total);
 
   return {
-    groupBy: groupByCustomerName ? ("customerName" as const) : ("customerType" as const),
+    groupBy: groupByCustomerName ? ("customerName" as const) : ("customerCategory" as const),
     buckets: CALL_TYPE_AGE_BUCKETS.map((b) => b.label),
     rows: matrixRows,
     grandTotal: total,
@@ -1112,6 +1112,7 @@ export function summarizeClosureDashboard(rows: Record<string, unknown>[], param
     },
     tatBuckets,
     closureTypes: closureBreakdown(rows, (row) => row.closure_type),
+    closureRemarks: closureBreakdown(rows, (row) => row.closure_remarks, 12),
     products: closureBreakdown(rows, (row) => row.product),
     allProducts: closureBreakdown(rows, (row) => row.product, 9999),
     callTypeAgeMatrix: buildCallTypeAgeMatrix(rows, Boolean(params.customerName)),
@@ -1130,6 +1131,7 @@ export function summarizeClosureDashboard(rows: Record<string, unknown>[], param
       customers: uniqueCount((row) => row.customer_name),
       customerCategories: uniqueCount((row) => row.customer_category),
       closureTypes: uniqueCount((row) => row.closure_type),
+      closureRemarks: uniqueCount((row) => row.closure_remarks),
       closedBy: uniqueCount((row) => row.ticket_closed_by),
     },
   };

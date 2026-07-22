@@ -101,13 +101,32 @@ router.post(
   },
 );
 
+const UPLOAD_CHILD_TABLES = ["active_tickets", "closed_tickets", "mrf_data", "sales_data"] as const;
+
 router.delete("/uploads/:id", requireAuth, requireUploadAccess, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid upload id" });
+    return;
+  }
+
   const supabase = getServiceClient();
+
+  // Delete child rows first so cascade work does not time out on large uploads
+  // (common on Vercel/serverless when closed_tickets has thousands of rows).
+  for (const table of UPLOAD_CHILD_TABLES) {
+    const { error: childError } = await supabase.from(table).delete().eq("upload_id", id);
+    if (childError) {
+      logger.error({ err: childError, uploadId: id, table }, "Failed deleting upload child rows");
+      res.status(500).json({ error: `Failed to delete ${table} rows: ${childError.message}` });
+      return;
+    }
+  }
 
   const { error } = await supabase.from("uploads").delete().eq("id", id);
   if (error) {
+    logger.error({ err: error, uploadId: id }, "Failed deleting upload");
     res.status(500).json({ error: error.message });
     return;
   }

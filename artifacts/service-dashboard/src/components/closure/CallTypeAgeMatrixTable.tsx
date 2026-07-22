@@ -2,13 +2,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { CallTypeAgeMatrix } from "@/lib/analytics-api";
 
 /**
- * Call Type × Customer Type × Age-in-hours matrix (count + percentage per
+ * Call Type × Customer Category × Age-in-hours matrix (count + percentage per
  * cell). When a Customer Name filter is active on the page, the backend
  * pivots this to Customer Name × Call Type so the same table becomes a
  * per-customer breakdown.
  */
 export function CallTypeAgeMatrixTable({ matrix }: { matrix: CallTypeAgeMatrix }) {
-  const groupLabel = matrix.groupBy === "customerName" ? "Customer Name" : "Customer Type";
+  const groupLabel =
+    matrix.groupBy === "customerName" ? "Customer Name" : "Customer Category";
   const buckets = matrix.buckets ?? [];
   const rows = matrix.rows ?? [];
 
@@ -19,7 +20,7 @@ export function CallTypeAgeMatrixTable({ matrix }: { matrix: CallTypeAgeMatrix }
         <p className="mt-0.5 text-[11px] text-[#667085]">
           {matrix.groupBy === "customerName"
             ? "Age-in-hours breakdown for the selected customer, by call type."
-            : "Non Part vs. Part tickets, by customer type and closure age."}
+            : "Non Part vs. Part tickets, by customer category and closure age."}
         </p>
 
         {rows.length === 0 ? (

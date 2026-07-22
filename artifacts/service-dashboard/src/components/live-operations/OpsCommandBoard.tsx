@@ -297,7 +297,7 @@ export function OpsCommandBoard({
         </Panel>
 
         <Panel
-          title="Customer Category (customer type)"
+          title="Customer Category"
           filter={
             <div className="flex items-center gap-2">
               <ChartFilter label="Show" value={categoryLimit} options={TOP_N_OPTIONS} onChange={setCategoryLimit} />

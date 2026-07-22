@@ -51,7 +51,7 @@ export function LiveOpsDataExplorer({
       view: "customerCategories",
       label: "Customer Categories",
       count: coverage.customerCategories,
-      unit: "customer types",
+      unit: "customer categories",
       description: "Separate from product category",
       icon: <Building2 className="size-4" />,
     },
