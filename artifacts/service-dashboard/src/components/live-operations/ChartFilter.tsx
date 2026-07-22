@@ -40,7 +40,4 @@ export const TOP_N_OPTIONS: ChartFilterOption[] = [
 
 export const STATUS_FILTER_OPTIONS: ChartFilterOption[] = [
   { label: "All Status", value: "all" },
-  { label: "Assigned", value: "Assigned" },
-  { label: "WIP", value: "WIP" },
-  { label: "MRF", value: "MRF" },
 ];

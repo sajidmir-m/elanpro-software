@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { LiveOpsCharts } from "@/lib/analytics-api";
-import { ChartFilter, STATUS_FILTER_OPTIONS, TOP_N_OPTIONS } from "./ChartFilter";
+import { ChartFilter, TOP_N_OPTIONS } from "./ChartFilter";
 import { OPS_CARD } from "./constants";
 
 function ChartShell({
@@ -188,6 +188,14 @@ export function OpsCharts({
   const [productLimit, setProductLimit] = useState("8");
   const [regionLimit, setRegionLimit] = useState("8");
 
+  const statusFilterOptions = useMemo(
+    () => [
+      { label: "All Status", value: "all" },
+      ...charts.statusBreakdown.segments.map((s) => ({ label: s.label, value: s.label })),
+    ],
+    [charts.statusBreakdown.segments],
+  );
+
   const statusSegments = useMemo(() => {
     if (statusFilter === "all") return charts.statusBreakdown.segments;
     return charts.statusBreakdown.segments.filter((s) => s.label === statusFilter);
@@ -217,7 +225,7 @@ export function OpsCharts({
           <ChartFilter
             label="Filter"
             value={statusFilter}
-            options={STATUS_FILTER_OPTIONS}
+            options={statusFilterOptions}
             onChange={(v) => {
               setStatusFilter(v);
               if (v !== "all") onStatusFilter?.(v);

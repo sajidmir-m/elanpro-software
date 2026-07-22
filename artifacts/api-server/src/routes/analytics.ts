@@ -18,6 +18,7 @@ import {
   ageUrgency,
   bucketStatus,
   rawTicketStatus,
+  statusesMatch,
   groupAgeByRegion,
   groupAgeByField,
   resolveRegion,
@@ -73,42 +74,43 @@ router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<voi
     const active = await fetchActive(params);
     attachTicketAges(active);
     const rows = active
-      .filter((row) => rawTicketStatus(row).toLowerCase() === requestedStatus.toLowerCase())
-      .map((row) => ({
-        ticketId: String(row.ticket_id ?? "—"),
-        ticketStatus: String(row.ticket_status ?? "—"),
+      .filter((row) => statusesMatch(rawTicketStatus(row), requestedStatus))
+      .map((row) => {
+        const classification = bucketStatus(row);
+        return {
+        ticketId: String(row.ticket_id ?? ""),
+        ticketStatus: String(row.ticket_status ?? ""),
         classification:
-          requestedStatus.toUpperCase() === "WIP" || requestedStatus.toUpperCase() === "MRF"
-            ? requestedStatus.toUpperCase()
-            : null,
+          classification === "WIP" || classification === "MRF" ? classification : null,
         reason:
-          requestedStatus.toUpperCase() === "WIP" || requestedStatus.toUpperCase() === "MRF"
-            ? operationalReasonForRow(row, requestedStatus.toUpperCase() as "WIP" | "MRF")
-            : String(row.last_action ?? row.wip_sub_stage ?? row.ticket_status ?? "—"),
-        wipSubStage: String(row.wip_sub_stage ?? "—"),
-        lastAction: String(row.last_action ?? "—"),
-        servicePartner: String(row.service_partner_name ?? "—"),
-        reportingManager: String(row.ash ?? "—"),
-        rsh: String(row.rsh ?? "—"),
-        product: String(row.product ?? "—"),
-        category: String(row.category ?? "—"),
-        customer: String(row.customer_name ?? "—"),
-        customerCategory: String(row.customer_category ?? "—"),
-        address: String(row.ticket_territory ?? row.state ?? "—").trim() || "—",
-        city: String(row.city ?? "—"),
-        state: String(row.state ?? "—"),
-        components: String(row.components ?? "—"),
-        reOpenTicket: String(row.re_open_ticket ?? "No"),
-        repeatTicket: String(row.repeat_ticket ?? "No"),
-        mrfApproval: String(row.mrf_approval ?? "No MRF"),
-        mrfStatus: String(row.mrf_status ?? "—"),
-        mrfComponents: String(row.mrf_components ?? "—"),
-        mrfApprovedBy: String(row.mrf_approved_by ?? "—"),
+          classification === "WIP" || classification === "MRF"
+            ? operationalReasonForRow(row, classification)
+            : String(row.last_action ?? row.wip_sub_stage ?? row.ticket_status ?? ""),
+        wipSubStage: String(row.wip_sub_stage ?? ""),
+        lastAction: String(row.last_action ?? ""),
+        servicePartner: String(row.service_partner_name ?? ""),
+        reportingManager: String(row.ash ?? ""),
+        rsh: String(row.rsh ?? ""),
+        product: String(row.product ?? ""),
+        category: String(row.category ?? ""),
+        customer: String(row.customer_name ?? ""),
+        customerCategory: String(row.customer_category ?? ""),
+        address: String(row.ticket_territory ?? row.state ?? "").trim(),
+        city: String(row.city ?? ""),
+        state: String(row.state ?? ""),
+        components: String(row.components ?? ""),
+        reOpenTicket: String(row.re_open_ticket ?? ""),
+        repeatTicket: String(row.repeat_ticket ?? ""),
+        mrfApproval: String(row.mrf_approval ?? ""),
+        mrfStatus: String(row.mrf_status ?? ""),
+        mrfComponents: String(row.mrf_components ?? ""),
+        mrfApprovedBy: String(row.mrf_approved_by ?? ""),
         mrfApprovedDate: row.mrf_approved_date ?? null,
         mrfDispatchDate: row.mrf_dispatch_date ?? null,
         ageDays: rowAgeDays(row),
         createdOn: row.created_on ?? null,
-      }))
+      };
+      })
       .sort((a, b) => b.ageDays - a.ageDays);
 
     res.json({ status: requestedStatus, total: rows.length, rows });

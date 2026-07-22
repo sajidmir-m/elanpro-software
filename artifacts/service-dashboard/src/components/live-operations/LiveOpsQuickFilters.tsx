@@ -2,9 +2,25 @@ import { cn } from "@/lib/utils";
 import type { FilterBarState } from "@/components/filter-bar";
 
 const QUICK = [
-  { id: "wip", label: "Only WIP", patch: { ticketStatus: "WIP" }, active: (f: FilterBarState) => f.ticketStatus === "WIP" },
-  { id: "mrf", label: "Only MRF", patch: { ticketStatus: "MRF" }, active: (f: FilterBarState) => f.ticketStatus === "MRF" },
-  { id: "assigned", label: "Only ASSIGNED", patch: { ticketStatus: "ASSIGNED" }, active: (f: FilterBarState) => f.ticketStatus === "ASSIGNED" },
+  {
+    id: "wip",
+    label: "Only WORK_IN_PROGRESS",
+    patch: { ticketStatus: "WORK_IN_PROGRESS" },
+    active: (f: FilterBarState) =>
+      f.ticketStatus === "WORK_IN_PROGRESS" || f.ticketStatus === "WIP",
+  },
+  {
+    id: "mrf",
+    label: "Only MRF",
+    patch: { ticketStatus: "MRF" },
+    active: (f: FilterBarState) => f.ticketStatus === "MRF",
+  },
+  {
+    id: "assigned",
+    label: "Only ASSIGNED",
+    patch: { ticketStatus: "ASSIGNED" },
+    active: (f: FilterBarState) => f.ticketStatus === "ASSIGNED",
+  },
   { id: "today", label: "Today", patch: { dateRangeDays: 1 }, active: (f: FilterBarState) => f.dateRangeDays === 1 },
   { id: "week", label: "This Week", patch: { dateRangeDays: 7 }, active: (f: FilterBarState) => f.dateRangeDays === 7 },
   { id: "month", label: "This Month", patch: { dateRangeDays: 30 }, active: (f: FilterBarState) => f.dateRangeDays === 30 },

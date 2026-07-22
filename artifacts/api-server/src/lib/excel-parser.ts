@@ -178,8 +178,10 @@ async function replaceTableData(
 }
 
 /**
- * Closed tickets are authoritative. This runs after either active or closed
- * imports so upload order cannot put completed work back into Active.
+ * When a Closed extract arrives, drop matching Active rows so Live Ops only
+ * keeps tickets that are still open. Do NOT run this after an Active upload —
+ * otherwise the Active sheet total (e.g. 705) is silently reduced and no longer
+ * matches the uploaded file / Excel pivot.
  */
 async function removeClosedTicketsFromActive(): Promise<void> {
   const supabase = getServiceClient();
@@ -231,7 +233,7 @@ export async function processExcelUpload(
         rows.map((r) => keysToSnake(mapActiveTicket(r, uploadId))),
         uploadId,
       );
-      await removeClosedTicketsFromActive();
+      // Keep the Active extract intact so status pivots match the uploaded sheet.
     } else if (fileType === "closed_tickets") {
       await replaceTableData(
         "closed_tickets",

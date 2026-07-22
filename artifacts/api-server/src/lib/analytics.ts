@@ -52,21 +52,35 @@ export function classifyWarranty(supportType: unknown): "in" | "out" | "other" {
 }
 
 export function rawTicketStatus(row: Record<string, unknown>): string {
-  return String(row.ticket_status ?? "").trim() || "Not recorded";
+  return String(row.ticket_status ?? "").trim();
 }
 
+/**
+ * Map uploaded ticket_status only — never sniff WIP Sub Stage / comments.
+ * That stage sniffing was inventing MRF/WIP counts that do not match Excel pivots.
+ */
 export function bucketStatus(row: Record<string, unknown>): "Assigned" | "WIP" | "MRF" | "Other" {
-  const status = String(row.ticket_status ?? "")
+  const status = rawTicketStatus(row)
     .toLowerCase()
-    .replace(/[_-]+/g, " ");
-  const stage = String(row.wip_sub_stage ?? "")
-    .toLowerCase()
-    .replace(/[_-]+/g, " ");
-  const combined = `${status} ${stage}`;
-  if (/\b(?:mrf|mrp)\b|parts?\s+pending|spares?\s+pending/.test(combined)) return "MRF";
-  if (/\bwip\b|\bwork\s+in\s+progress\b/.test(combined)) return "WIP";
-  if (!/\bunassigned\b/.test(combined) && /\bassign(?:ed|ment)?\b/.test(combined)) return "Assigned";
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (status === "mrf" || status === "mrp") return "MRF";
+  if (status === "wip" || status === "work in progress") return "WIP";
+  if (status === "assigned" || status === "assignment") return "Assigned";
   return "Other";
+}
+
+export function statusesMatch(actual: string, wanted: string): boolean {
+  const a = actual.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const w = wanted.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!w) return true;
+  if (a === w) return true;
+  // Accept common sheet aliases so filters still work across extracts.
+  if ((w === "wip" || w === "work in progress") && (a === "wip" || a === "work in progress")) return true;
+  if ((w === "mrf" || w === "mrp") && (a === "mrf" || a === "mrp")) return true;
+  if ((w === "assigned" || w === "assignment") && (a === "assigned" || a === "assignment")) return true;
+  return false;
 }
 
 function isTechnicianAccepted(row: Record<string, unknown>): boolean {
@@ -142,7 +156,7 @@ function matchesAnalyticsFilters(row: Record<string, unknown>, params: Analytics
     if (area !== params.area.toLowerCase()) return false;
   }
   if (params.ticketStatus) {
-    if (rawTicketStatus(row).toLowerCase() !== params.ticketStatus.toLowerCase()) return false;
+    if (!statusesMatch(rawTicketStatus(row), params.ticketStatus)) return false;
   }
   if (params.callAgeRange && params.callAgeRange !== "all") {
     if (!matchesCallAgeRange(row, params.callAgeRange)) return false;
@@ -305,6 +319,7 @@ export function statusBreakdown(rows: Record<string, unknown>[]) {
   const groups = new Map<string, number>();
   for (const row of rows) {
     const label = rawTicketStatus(row);
+    if (!label) continue;
     groups.set(label, (groups.get(label) ?? 0) + 1);
   }
   return [...groups.entries()]
@@ -1394,12 +1409,8 @@ export function summarizeLiveOperationsDashboard(
     pct: pct(item.count),
   }));
 
-  const workloadOverview = [
-    { label: "Assigned", count: assigned, pct: pct(assigned), color: "#2563EB" },
-    { label: "WIP", count: wip, pct: pct(wip), color: "#F59E0B" },
-    { label: "MRF Pending", count: mrf, pct: pct(mrf), color: "#8B5CF6" },
-    ...(other > 0 ? [{ label: "Other", count: other, pct: pct(other), color: "#64748B" }] : []),
-  ];
+  // Same as Ticket Status cards — exact uploaded ticket_status values only.
+  const workloadOverview = rawStatusBreakdown;
 
   type PartnerAgg = OpsBucket & {
     label: string;
