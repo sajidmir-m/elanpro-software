@@ -12,6 +12,15 @@ import { logger } from "./lib/logger";
 const app: Application = express();
 const isServerless = Boolean(process.env.VERCEL);
 
+function isAllowedVercelOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 function resolveAllowedOrigins(): string[] | true {
   const origins = new Set<string>();
 
@@ -66,6 +75,9 @@ app.use(
       if (!origin) return callback(null, true);
       if (allowedOrigins === true) return callback(null, true);
       if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      if (isServerless && isAllowedVercelOrigin(origin)) {
         return callback(null, true);
       }
       return callback(new Error("Not allowed by CORS"));
