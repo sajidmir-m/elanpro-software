@@ -116,6 +116,7 @@ function mapSharedTicketFields(row: Record<string, unknown>, uploadId: number) {
     problemDescription: str(row["Problem Description"]),
     ticketPriority: str(row["Ticket Priority"]),
     ticketStatus: str(row["Ticket Status"]),
+    lastStatus2: str(row["Last status 2"]) ?? str(row["Last Status 2"]),
     wipSubStage: str(row["WIP Sub Stage"]),
     wipSubStageDate: str(row["WIP Sub Stage Date"]),
     lastAction: str(row["Last Action"]),
@@ -217,8 +218,17 @@ async function replaceTableData(
   uploadId: number,
 ): Promise<void> {
   const supabase = getServiceClient();
+  const rows = mapped.map((item) => {
+    const row = keysToSnake(item);
+    // keysToSnake turns lastStatus2 → last_status2; DB column is last_status_2.
+    if ("last_status2" in row) {
+      row.last_status_2 = row.last_status2;
+      delete row.last_status2;
+    }
+    return row;
+  });
 
-  for (const ch of chunk(mapped, 500)) {
+  for (const ch of chunk(rows, 500)) {
     const { error } = await supabase.from(table).insert(ch);
     if (error) throw new Error(error.message);
   }
@@ -283,27 +293,27 @@ export async function processExcelUpload(
     if (fileType === "active_tickets") {
       await replaceTableData(
         "active_tickets",
-        rows.map((r) => keysToSnake(mapActiveTicket(r, uploadId))),
+        rows.map((r) => mapActiveTicket(r, uploadId)),
         uploadId,
       );
       // Keep the Active extract intact so status pivots match the uploaded sheet.
     } else if (fileType === "closed_tickets") {
       await replaceTableData(
         "closed_tickets",
-        rows.map((r) => keysToSnake(mapClosedTicket(r, uploadId))),
+        rows.map((r) => mapClosedTicket(r, uploadId)),
         uploadId,
       );
       await removeClosedTicketsFromActive();
     } else if (fileType === "mrf_data") {
       await replaceTableData(
         "mrf_data",
-        rows.map((r) => keysToSnake(mapMrfData(r, uploadId))),
+        rows.map((r) => mapMrfData(r, uploadId)),
         uploadId,
       );
     } else if (fileType === "sales_data") {
       await replaceTableData(
         "sales_data",
-        rows.map((r) => keysToSnake(mapSalesData(r, uploadId))),
+        rows.map((r) => mapSalesData(r, uploadId)),
         uploadId,
       );
     } else {

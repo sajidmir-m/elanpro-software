@@ -55,6 +55,31 @@ export function rawTicketStatus(row: Record<string, unknown>): string {
   return String(row.ticket_status ?? "").trim();
 }
 
+/** Exact uploaded "Last status 2" value. */
+export function rawLastStatus2(row: Record<string, unknown>): string {
+  return String(row.last_status_2 ?? "").trim();
+}
+
+/**
+ * Family of Last status 2 for popup filters (MRF / FGR / WIP / QUOTE / …).
+ * Prefixed stages like "MRF - LPO Issued" become "MRF".
+ */
+export function lastStatusFamily(lastStatus2: string): string {
+  const value = String(lastStatus2 ?? "").trim();
+  if (!value) return "";
+  const normalized = value.toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (normalized === "ASSIGNED") return "ASSIGNED";
+  if (normalized === "OPEN") return "OPEN";
+  if (normalized === "WORK IN PROGRESS" || normalized === "WIP") return "WIP";
+  const prefix = value.split(/[\s-]/)[0]?.trim() ?? value;
+  if (/^MRF$/i.test(prefix)) return "MRF";
+  if (/^FGR$/i.test(prefix)) return "FGR";
+  if (/^WIP$/i.test(prefix)) return "WIP";
+  if (/^QUOTE$/i.test(prefix)) return "QUOTE";
+  if (/^LPO$/i.test(prefix)) return "LPO";
+  return prefix.toUpperCase();
+}
+
 /**
  * Map uploaded ticket_status only — never sniff WIP Sub Stage / comments.
  * That stage sniffing was inventing MRF/WIP counts that do not match Excel pivots.

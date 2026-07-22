@@ -55,6 +55,8 @@ export type RecordsResponse = {
 export type StatusCallRow = {
   ticketId: string;
   ticketStatus: string;
+  lastStatus2: string;
+  lastStatusFamily: string;
   classification: string | null;
   reason: string;
   wipSubStage: string;

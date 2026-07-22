@@ -18,6 +18,8 @@ import {
   ageUrgency,
   bucketStatus,
   rawTicketStatus,
+  rawLastStatus2,
+  lastStatusFamily,
   statusesMatch,
   groupAgeByRegion,
   groupAgeByField,
@@ -77,9 +79,12 @@ router.get("/analytics/status-calls", requireAuth, async (req, res): Promise<voi
       .filter((row) => statusesMatch(rawTicketStatus(row), requestedStatus))
       .map((row) => {
         const classification = bucketStatus(row);
+        const lastStatus2 = rawLastStatus2(row);
         return {
         ticketId: String(row.ticket_id ?? ""),
         ticketStatus: String(row.ticket_status ?? ""),
+        lastStatus2,
+        lastStatusFamily: lastStatusFamily(lastStatus2),
         classification:
           classification === "WIP" || classification === "MRF" ? classification : null,
         reason:
